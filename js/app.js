@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.3.2';
+const APP_VERSION='1.3.3';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -12,7 +12,7 @@ const U=(k,cls,sw)=>svgIcon(UI[k],cls,sw);
 // ---------- formato ----------
 function fmtNum(cents){const neg=cents<0;cents=Math.abs(Math.round(cents));const e=Math.floor(cents/100).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');return (neg?'-':'')+e+','+String(cents%100).padStart(2,'0');}
 const money=c=>fmtNum(c)+'\u00a0'+D().settings.currency;
-function moneyH(c){const s=fmtNum(c),i=s.lastIndexOf(',');return `${s.slice(0,i)}<small class="c">${s.slice(i)}</small>\u00a0${esc(D().settings.currency)}`;}
+function moneyH(c){return `<span class="num">${fmtNum(c)}\u00a0${esc(D().settings.currency)}</span>`;}
 const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const parseIso=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);};
 const fmtDate=s=>{const[y,m,d]=s.split('-');return d+'/'+m+'/'+y;};
@@ -351,8 +351,8 @@ document.addEventListener('change',ev=>{const t=ev.target;
   else if(t.id==='fileImport'&&t.files[0]){const r=new FileReader();r.onload=()=>{const txt=r.result;t.value='';ask({title:'Restaurar copia',msg:'Esto sustituirá todos los datos actuales. ¿Continuar?',ok:'Restaurar'}).then(d=>{if(!d)return;try{Store.importData(txt);st.account='all';render();toast('Copia restaurada');}catch(e){toast('Error: '+e.message);}});};r.readAsText(t.files[0]);}
 });
 function fitCenter(){const c=$('#chart .center');if(!c)return;c.style.fontSize='';let f=parseFloat(getComputedStyle(c).fontSize);
-  while(f>11&&[...c.children].some(d=>d.scrollWidth>c.clientWidth)){f-=.5;c.style.fontSize=f+'px';}}
-window.addEventListener('resize',()=>fitCenter());
+  while(f>11&&[...c.querySelectorAll('.num')].some(d=>d.getBoundingClientRect().width>c.clientWidth)){f-=.5;c.style.fontSize=f+'px';}}
+window.addEventListener('resize',()=>fitCenter());if(document.fonts)document.fonts.ready.then(()=>fitCenter());
 function bindSwipe(){fitCenter();const el=$('#chart');if(!el)return;let x0=null,y0=null;
   el.addEventListener('touchstart',e=>{x0=e.touches[0].clientX;y0=e.touches[0].clientY;},{passive:true});
   el.addEventListener('touchend',e=>{if(x0===null)return;const dx=e.changedTouches[0].clientX-x0,dy=e.changedTouches[0].clientY-y0;x0=null;if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy))shift(dx<0?1:-1);});}

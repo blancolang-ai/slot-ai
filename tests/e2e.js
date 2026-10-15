@@ -166,7 +166,7 @@ process.on('exit',()=>console.log(results.join('\n')));
    await sc.close();};
   await shoot(false);await shoot(true);
  }
- await p.goto(URL);await p.waitForSelector('.ci');for(const w of [360,412]){await p.setViewportSize({width:w,height:760});await p.waitForTimeout(100);const m=await p.$eval('#chart .center',c=>{const s=getComputedStyle(c);return{fs:parseFloat(s.fontSize),tn:s.fontVariantNumeric,fit:[...c.children].every(d=>d.scrollWidth<=c.clientWidth),tf:s.transform}});ok('totales donut legibles a '+w+'px ('+m.fs+'px, tnum, sin escalar)',m.fs>=16&&m.tn.includes('tabular')&&m.fit&&/^matrix\(1, 0, 0, 1,/.test(m.tf));}
+ await p.goto(URL);await p.waitForSelector('.ci');for(const w of [360,412]){await p.setViewportSize({width:w,height:760});await p.waitForTimeout(100);const m=await p.$eval('#chart .center',c=>{const s=getComputedStyle(c);return{fs:parseFloat(s.fontSize),tn:s.fontVariantNumeric,fit:[...c.querySelectorAll('.num')].every(d=>d.getBoundingClientRect().width<=c.clientWidth),tf:s.transform}});ok('totales donut legibles a '+w+'px ('+m.fs+'px, tnum, sin escalar)',m.fs>=21&&m.tn.includes('tabular')&&m.tn.includes('lining')&&m.fit&&/^matrix\(1, 0, 0, 1,/.test(m.tf));}
  ok('sin errores de consola '+JSON.stringify(errs),errs.length===0);
  console.log(results.join('\n'));console.log(results.filter(r=>r.startsWith('PASS')).length+'/'+results.length+' OK');await b.close();
 })().catch(e=>{console.error(e);process.exit(1)});

@@ -7,7 +7,8 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;paddin
 input,select{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px}
 svg{display:block}
 #app{max-width:520px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;position:relative}
-small.c{font-size:.68em;font-family:Georgia,serif}
+small.c{font-size:inherit;font-family:inherit;vertical-align:baseline}
+.num,.center,.saldo,.anum,.tx,.grow,.arow{font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1,"tnum" 1}
 .top{background:var(--hdr);color:#fff;padding:calc(env(safe-area-inset-top) + 6px) 6px 6px;display:flex;align-items:center;gap:2px;min-height:56px;position:sticky;top:0;z-index:10}
 .top .ib{width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#fff}
 .top .ib svg{width:25px;height:25px}
@@ -22,13 +23,13 @@ small.c{font-size:.68em;font-family:Georgia,serif}
 .ci{position:absolute;width:13%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center}
 .ci svg{width:100%;aspect-ratio:1}
 .ci .pc{font-size:12px;font-weight:600;margin-top:1px;position:absolute;top:100%}
-.center{position:absolute;left:50%;top:50%;width:37%;transform:translate(-50%,-50%);text-align:center;font-weight:600;font-size:clamp(17px,5.6vw,23px);line-height:1.25;white-space:nowrap;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;letter-spacing:-.01em;-webkit-text-size-adjust:100%;text-size-adjust:100%}
-.center>div{overflow:hidden}.center small.c{font-family:inherit;font-size:.8em;font-weight:600}
+.center{position:absolute;left:50%;top:50%;width:37%;transform:translate(-50%,-50%);text-align:center;font-size:clamp(22px,6.6vw,26px);font-weight:700;line-height:1.25;white-space:nowrap;letter-spacing:-.01em;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.center>div{overflow:hidden}
 .center .inc{color:var(--green)}.center .exp{color:var(--red)}
 .saldorow{display:flex;align-items:center;gap:14px;padding:8px 18px}
 .saldorow .lb{width:52px;height:40px;color:var(--green)}.saldorow .lb svg{width:52px;height:40px}
 .saldo{flex:1;height:52px;background:var(--hdr);color:#fff;border-radius:3px;font-size:20px;box-shadow:inset 0 -2px 0 rgba(0,0,0,.12),2px 2px 0 rgba(0,0,0,.08);display:flex;align-items:center;justify-content:center;gap:12px}
-.saldo b{font-weight:400;font-size:17px}
+.saldo b{font-weight:600;font-size:20px}
 .bigbtns{display:flex;justify-content:space-between;padding:10px 34px calc(env(safe-area-inset-bottom) + 18px);margin-top:auto;position:sticky;bottom:0}
 .circ{width:112px;height:112px;border-radius:50%;border:6px solid;display:flex;align-items:center;justify-content:center;background:var(--bg)}
 .circ svg{width:36px;height:36px}
