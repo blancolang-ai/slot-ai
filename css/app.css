@@ -134,3 +134,8 @@ body.dark .grow .nm,body.dark .catgrid span{filter:brightness(1.7)}
 .dlg h2{font-size:18px;font-weight:600;margin:0 0 10px}.dlg p{color:var(--muted);font-size:15px;line-height:1.4;margin:0 0 14px}
 .dlgsel{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--muted);margin-bottom:14px}.dlgsel select{width:100%}
 .dlgbtns{display:flex;justify-content:flex-end;gap:8px}.btn.flat{background:transparent;color:var(--green);font-weight:600}
+.mfprev{max-height:52vh;overflow:auto;font-size:14px;margin-bottom:12px;font-variant-numeric:lining-nums tabular-nums}
+.mfprev p{margin:0 0 8px;color:var(--fg)}.mfprev h3{font-size:13px;color:var(--green);text-transform:uppercase;margin:10px 0 4px}
+.mfprev ul{list-style:none;margin:0;padding:0}.mfprev li{display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid var(--line)}
+.mfprev li>span{white-space:nowrap;color:var(--muted)}.mfmode{display:flex;align-items:center;gap:8px;padding:6px 0;color:var(--fg)}
+.dlg:has(.mfprev){max-width:420px}

@@ -169,6 +169,23 @@ process.on('exit',()=>console.log(results.join('\n')));
  await p.goto(URL);await p.waitForSelector('.ci');for(const w of [360,412]){await p.setViewportSize({width:w,height:760});await p.waitForTimeout(100);const m=await p.$eval('#chart .center',c=>{const s=getComputedStyle(c);return{fs:parseFloat(s.fontSize),tn:s.fontVariantNumeric,fit:[...c.querySelectorAll('.num')].every(d=>d.getBoundingClientRect().width<=c.clientWidth),tf:s.transform}});ok('totales donut legibles a '+w+'px ('+m.fs+'px, tnum, sin escalar)',m.fs>=17.5&&m.fs<=20.5&&m.tn.includes('tabular')&&m.tn.includes('lining')&&m.fit&&/^matrix\(1, 0, 0, 1,/.test(m.tf));}
  {await p.setViewportSize({width:412,height:760});const r=await p.$$eval('#totInc,#totExp,#balance',els=>els.map(e=>{const n=e.querySelector('.num'),c=e.querySelector('small.c');if(!n||!c)return null;const sn=getComputedStyle(n),sc=getComputedStyle(c);const t=document.createElement('span');t.textContent='0';n.insertBefore(t,c);const bi=t.getBoundingClientRect().bottom,bc=c.getBoundingClientRect().bottom;t.remove();return{ratio:parseFloat(sc.fontSize)/parseFloat(sn.fontSize),same:sc.fontFamily===sn.fontFamily,lining:sc.fontVariantNumeric.includes('lining'),va:sc.verticalAlign,db:Math.abs(bi-bc)};}));
   ok('céntimos 0,8em, misma fuente y línea base '+JSON.stringify(r),r.every(x=>x&&Math.abs(x.ratio-.8)<.02&&x.same&&x.lining&&x.va==='baseline'&&x.db<2.5));}
+ // --- importar de Monefy (fixtures sintéticos) ---
+ {const M=require('../js/monefy.js');
+  ok('monefy: importes',M.parseAmount('-1.234,56')===-123456&&M.parseAmount('-1,234.56')===-123456&&M.parseAmount('27,2')===2720&&M.parseAmount('-27.2')===-2720&&M.parseAmount('1.000.000')===100000000);
+  const q=M.parse(fs.readFileSync(__dirname+'/monefy-sample-1252.csv'));
+  ok('monefy: Windows-1252, ; y coma decimal, fecha dd.mm.aaaa',q.sep===';'&&q.summary.expense.some(e=>e.name==='Categoría'||e.name==='Ropa')&&q.summary.from==='2024-04-01'&&q.summary.income[0].total===200000);
+  const m=M.mapExpense(q.summary.expense.map(e=>e.name));ok('monefy: >6 categorías → se agrupan las menores en Otros',m.merged.length===2&&new Set(Object.values(m.map)).size===6);}
+ await p.goto(URL);await p.evaluate(v=>localStorage.setItem('gastos.v1',JSON.stringify(v)),V1);await p.reload();await p.waitForSelector('.ci');
+ await p.goto(URL+'#/ajustes');await p.setInputFiles('#fileMonefy',__dirname+'/monefy-sample.csv');await p.waitForSelector('#mfPrev');
+ {const pv=await txt('#mfPrev');ok('monefy: vista previa (6 mov., 1 transferencia, 2 cuentas, 1 fila ignorada)',pv.includes('6 movimientos')&&pv.includes('1 transferencias')&&pv.includes('Caja A')&&pv.includes('Banco B')&&pv.includes('1.234,56')&&pv.includes('1 filas ignoradas'));}
+ await p.click('#dlgCancel');ok('monefy: cancelar no cambia nada',(await p.evaluate(()=>JSON.parse(localStorage.getItem('gastos.v1')).transactions.length))===4);
+ await p.setInputFiles('#fileMonefy',__dirname+'/monefy-sample.csv');await p.waitForSelector('#mfPrev');await p.click('#dlgOk');await p.waitForTimeout(200);
+ {const d=await p.evaluate(()=>JSON.parse(localStorage.getItem('gastos.v1')));const an=id=>d.accounts.find(a=>a.id===id).name;const tr=d.transactions.find(t=>t.type==='transfer');
+  ok('monefy: reemplazar → cuentas, categorías reales y transferencia',d.accounts.map(a=>a.name).join()==='Caja A,Banco B'&&d.transactions.length===6&&an(tr.accountId)==='Caja A'&&an(tr.toAccountId)==='Banco B'&&tr.amount===20000
+   &&d.categories.filter(c=>c.type==='expense').length===6&&d.categories.some(c=>c.name==='Súper')&&d.categories.some(c=>c.name==='Coche')&&d.categories.some(c=>c.type==='income'&&c.name==='Nómina')&&d.transactions.some(t=>t.note==='Pan, leche'));}
+ await p.goto(URL+'#/ajustes');await p.setInputFiles('#fileMonefy',__dirname+'/monefy-sample.csv');await p.waitForSelector('#mfPrev');await p.check('input[value="merge"]');await p.click('#dlgOk');await p.waitForTimeout(200);
+ ok('monefy: añadir de nuevo no duplica',(await p.evaluate(()=>JSON.parse(localStorage.getItem('gastos.v1')).transactions.length))===6);
+ await p.goto(URL);await p.waitForSelector('.ci');await leftPick('all');ok('monefy: la app muestra los datos importados',(await txt('#totExp')).includes('1.254,31'));
  ok('sin errores de consola '+JSON.stringify(errs),errs.length===0);
  console.log(results.join('\n'));console.log(results.filter(r=>r.startsWith('PASS')).length+'/'+results.length+' OK');await b.close();
 })().catch(e=>{console.error(e);process.exit(1)});

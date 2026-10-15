@@ -1,0 +1,9 @@
+﻿date,account,category,amount,currency,converted amount,currency,description
+3/1/2025,Caja A,Súper,-12.5,EUR,-12.5,EUR,"Pan, leche"
+15/1/2025,Caja A,Nómina,1500,EUR,1500,EUR,
+20/1/2025,Caja A,To 'Banco B',-200,EUR,-200,EUR,ahorro
+20/1/2025,Banco B,From 'Caja A',200,EUR,200,EUR,ahorro
+2/2/2025,Banco B,Coche,"-1,234.56",EUR,"-1,234.56",EUR,Taller
+28/2/2025,Banco B,Ventas,99.99,EUR,99.99,EUR,
+5/3/2025,Caja A,Súper,-7.25,EUR,-7.25,EUR,
+bad,Caja A,Súper,-1,EUR,-1,EUR,

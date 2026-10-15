@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.3.5';
+const APP_VERSION='1.4.0';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -137,6 +137,7 @@ function viewSettings(){const s=D().settings;
   <div class="section">Datos</div>
   <div class="row"><label>Copia de seguridad (JSON)</label><button class="btn" data-act="exportJson" id="btnExport">Exportar</button></div>
   <div class="row"><label>Restaurar copia</label><button class="btn" data-act="importJson">Importar</button><input type="file" id="fileImport" accept=".json,application/json" hidden></div>
+  <div class="row"><label>Importar de Monefy (CSV)</label><button class="btn" data-act="importMonefy" id="btnMonefy">Importar</button><input type="file" id="fileMonefy" accept=".csv,text/csv,text/plain" hidden></div>
   <div class="row"><label>Exportar a CSV (Excel)</label><button class="btn" data-act="exportCsv" id="btnCsv">CSV</button></div>
   <div class="row"><label>Borrar todos los datos</label><button class="btn danger" data-act="reset">Borrar</button></div>
   <div class="section">Acerca de</div>
@@ -266,6 +267,23 @@ function delAccount(id,name,form){
     const to=d.querySelector('#dlgTo').value,n=Store.moveAccount(id,to);Store.remove('accounts',id);if(st.account===id)st.account=to;closeForm();render();toast(n+' transacciones movidas · cuenta eliminada');});
 }
 
+// ---------- importar de Monefy ----------
+function importMonefy(buf){let p;try{p=Monefy.parse(buf);}catch(e){toast('Error: '+e.message);return;}
+  if(!p.tx.length){ask({title:'Importar de Monefy',msg:'No se encontraron movimientos en el archivo.',ok:'Entendido',okOnly:true});return;}
+  const s=p.summary,m=Monefy.mapExpense(s.expense.map(e=>e.name)),eur=c=>fmtNum(c)+'\u00a0'+esc(p.currencies.length===1&&p.currencies[0]!=='EUR'?p.currencies[0]:'€');
+  const li=(a,f)=>a.map(f).join('');
+  const body=`<div class="mfprev" id="mfPrev">
+   <p><b>${s.n}</b> movimientos · ${esc(fmtLong(s.from))} – ${esc(fmtLong(s.to))}${s.transfers?` · <b>${s.transfers}</b> transferencias`:''}${p.errors.length?`<br><span class="exp">${p.errors.length} filas ignoradas (líneas ${p.errors.slice(0,5).join(', ')}${p.errors.length>5?'…':''})</span>`:''}</p>
+   <h3>Cuentas (${p.accounts.length})</h3><ul>${li(s.perAccount,a=>`<li>${esc(a.name)} <span>${a.n} · ${eur(a.balance)}</span></li>`)}</ul>
+   <h3>Gastos (${s.expense.length} categorías)</h3><ul>${li(s.expense,e=>`<li>${esc(e.name)}${m.merged.includes(e.name)?' → <i>Otros</i>':''} <span>${e.n} · <span class="exp">${eur(e.total)}</span></span></li>`)}</ul>
+   ${m.merged.length?`<p class="exp">Slot-AI tiene 6 categorías de gasto: al reemplazar, ${m.merged.length} se agruparán en «Otros».</p>`:''}
+   <h3>Ingresos</h3><ul>${li(s.income,e=>`<li>${esc(e.name)} <span>${e.n} · <span class="inc">${eur(e.total)}</span></span></li>`)}</ul>
+   <label class="mfmode"><input type="radio" name="mfMode" value="replace" checked> Reemplazar mis datos</label>
+   <label class="mfmode"><input type="radio" name="mfMode" value="merge"> Añadir a mis datos (sin duplicados)</label></div>`;
+  ask({title:'Importar de Monefy',msg:'Revisa el resumen antes de importar.',ok:'Importar',body}).then(d=>{if(!d)return;
+    const mode=d.querySelector('input[name=mfMode]:checked').value;const r=Monefy.build(p,Store.data,mode,Store.uid);
+    Store.importData(JSON.stringify(r.data));st.account='all';st.ptype='all';render();toast(r.added+' movimientos importados'+(r.dup?` · ${r.dup} duplicados omitidos`:''));});}
+
 // ---------- formularios: categoría y cuenta ----------
 function openForm(kind,id){
   const isAcc=kind==='acc';const coll=isAcc?'accounts':'categories';
@@ -337,6 +355,7 @@ document.addEventListener('click',ev=>{
     case 'exportJson':download('slot-ai-copia-'+stamp()+'.json',Store.exportData(),'application/json');break;
     case 'exportCsv':download('slot-ai-'+stamp()+'.csv',csv(),'text/csv;charset=utf-8');break;
     case 'importJson':$('#fileImport').click();break;
+    case 'importMonefy':$('#fileMonefy').click();break;
     case 'reset':ask({title:'Borrar todos los datos',msg:'¿Borrar TODOS los datos? Esta acción no se puede deshacer.',ok:'Borrar'}).then(d=>{if(!d)return;Store.reset();st.account='all';render();toast('Datos borrados');});break;
   }
 });
@@ -348,6 +367,7 @@ document.addEventListener('change',ev=>{const t=ev.target;
   else if(t.id==='setCur'){Store.setSetting('currency',t.value.trim()||'€');render();}
   else if(t.id==='setWeek'){Store.setSetting('weekStart',+t.value);render();}
   else if(t.id==='setDark'){Store.setSetting('dark',t.checked);render();}
+  else if(t.id==='fileMonefy'&&t.files[0]){const f=t.files[0];t.value='';f.arrayBuffer().then(importMonefy).catch(e=>toast('Error: '+e.message));}
   else if(t.id==='fileImport'&&t.files[0]){const r=new FileReader();r.onload=()=>{const txt=r.result;t.value='';ask({title:'Restaurar copia',msg:'Esto sustituirá todos los datos actuales. ¿Continuar?',ok:'Restaurar'}).then(d=>{if(!d)return;try{Store.importData(txt);st.account='all';render();toast('Copia restaurada');}catch(e){toast('Error: '+e.message);}});};r.readAsText(t.files[0]);}
 });
 function fitCenter(){const c=$('#chart .center');if(!c)return;c.style.fontSize='';let f=parseFloat(getComputedStyle(c).fontSize);

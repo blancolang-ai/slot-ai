@@ -1,0 +1,9 @@
+Fecha;Cuenta;Categoría;Importe;Moneda;Descripción
+01.04.2024;Efectivo;Comida;-10,50;EUR;nota Comida
+02.04.2024;Efectivo;Casa;-20,50;EUR;nota Casa
+03.04.2024;Efectivo;Coche;-30,50;EUR;nota Coche
+04.04.2024;Efectivo;Ocio;-40,50;EUR;nota Ocio
+05.04.2024;Efectivo;Salud;-50,50;EUR;nota Salud
+06.04.2024;Efectivo;Ropa;-60,50;EUR;nota Ropa
+07.04.2024;Efectivo;Mascota;-70,50;EUR;nota Mascota
+30.04.2024;Efectivo;Salario;2.000,00;EUR;
