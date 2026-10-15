@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.4.4';
+const APP_VERSION='1.4.5';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -159,7 +159,7 @@ function leftDrawer(){
    <div class="ddwrap"><button class="acccard" id="accCard" data-act="accDrop">${I(a.icon,'',1.1)}<span class="t">${esc(a.name)}<small>EUR</small></span></button>
    ${st.accDrop?`<div class="dd" id="accDrop">${items.map(x=>`<button data-act="pickAcc" data-id="${x.id}" class="${st.account===x.id?'sel':''}">${I(x.icon,'',1.1)}<span class="t">${esc(x.name)}<small>EUR</small></span></button>`).join('')}</div>`:''}</div>
    ${opts.map(([k,l])=>`<button class="obtn ${st.ptype===k?'on':''}" data-act="period" data-p="${k}">${l}</button>`).join('')}
-   ${st.ptype==='range'?`<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:13px"><input type="date" id="rfrom" value="${st.from}" aria-label="Desde"><input type="date" id="rto" value="${st.to}" aria-label="Hasta"></div>`:''}
+   ${st.ptype==='range'?`<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:13px"><input type="date" id="rfrom" value="${st.from}" aria-label="Desde"><input type="date" id="rto" value="${st.to}" aria-label="Hasta"><button class="btn" data-act="applyRange" id="rApply">Aplicar</button></div>`:''}
    <div style="height:18px"></div>
    <label class="obtn" style="display:flex;align-items:center;justify-content:center;position:relative">Elegir fecha<input type="date" id="pickDate" value="${iso(st.anchor)}" style="position:absolute;inset:0;opacity:0;width:100%"></label>
   </div></div>`;
@@ -370,9 +370,10 @@ document.addEventListener('click',ev=>{
   switch(a){
     case 'left':st.left=!st.left;st.right=false;st.accDrop=false;render();break;
     case 'right':st.right=!st.right;st.left=false;render();break;
+    case 'applyRange':{const f=$('#rfrom'),t=$('#rto');if(f&&f.value)st.from=f.value;if(t&&t.value)st.to=t.value;if(st.from>st.to)[st.from,st.to]=[st.to,st.from];st.left=false;st.accDrop=false;render();break;}
     case 'accDrop':st.accDrop=!st.accDrop;render();break;
-    case 'pickAcc':st.account=b.dataset.id;st.accDrop=false;render();break;
-    case 'period':st.ptype=b.dataset.p;st.anchor=new Date();if(st.ptype==='range'){st.from=iso(new Date(st.anchor.getFullYear(),st.anchor.getMonth(),1));st.to=today();render();}else{st.left=false;render();}break;
+    case 'pickAcc':st.account=b.dataset.id;st.accDrop=false;st.left=false;render();break;
+    case 'period':st.ptype=b.dataset.p;st.accDrop=false;st.anchor=new Date();if(st.ptype==='range'){st.from=iso(new Date(st.anchor.getFullYear(),st.anchor.getMonth(),1));st.to=today();render();}else{st.left=false;render();}break;
     case 'back':location.hash='#/';break;
     case 'go':st.right=false;location.hash='#'+b.dataset.r;break;
     case 'prev':shift(-1);break;case 'next':shift(1);break;

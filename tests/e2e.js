@@ -185,7 +185,7 @@ const jp='/tmp/backup.json';await dl.saveAs(jp);
  {const sc=await mk();const q=await sc.newPage();watch(q);const T=x=>q.textContent(x);const isAll=async()=>/\d+ \w+ \d\d - \d+ \w+ \d\d/.test(await T('#plabel'));
   await q.goto(URL);await q.evaluate(v=>{localStorage.removeItem('slotai.view');localStorage.setItem('gastos.v1',JSON.stringify(v));},V1);await q.reload();await q.waitForSelector('.ci');
   ok('arranque: periodo Todo y Todas las cuentas',await isAll()&&(await T('#accName'))==='Todas las cuentas');
-  await q.click('[data-act="left"]');await q.click('#accCard');await q.click('#accDrop button:has-text("Tarjeta")');await q.click('[data-act="period"][data-p="month"]');
+  await q.click('[data-act="left"]');await q.click('#accCard');await q.click('#accDrop button:has-text("Tarjeta")');await q.click('[data-act="left"]');await q.click('[data-act="period"][data-p="month"]');
   await q.goto(URL+'#/categorias');await q.click('[data-t="income"]');await q.goto(URL);await q.reload();await q.waitForSelector('.ci');
   ok('arranque: recuerda la cuenta y vuelve a Todo',(await T('#accName'))==='Tarjeta'&&await isAll());
   await q.goto(URL+'#/categorias');await q.waitForSelector('.tabs');ok('arranque: recuerda la pestaña Ingresos en Categorías',(await q.getAttribute('[data-t="income"]','class')||'').includes('on'));
@@ -200,6 +200,17 @@ const jp='/tmp/backup.json';await dl.saveAs(jp);
   await q.click('#balance');await q.waitForSelector('.group');await q.click('.grow >> nth=0');
   const dv=(await q.textContent('.tx:has-text("viejo") .d')).trim(),dn=(await q.textContent('.tx:has-text("nuevo") .d')).trim();
   ok('fechas: año anterior con YY ('+dv+'), año actual sin año ('+dn+')',dv==='12 mar '+yy&&dn==='5 ene');
+  await sc.close();}
+ // --- cajón izquierdo: elegir cierra ---
+ {const sc=await mk();const q=await sc.newPage();watch(q);const T=x=>q.textContent(x);const open=async()=>{await q.click('[data-act="left"]');await q.waitForSelector('#leftDrawer');};const closed=async()=>!(await q.$('#leftDrawer'));
+  await q.goto(URL);await q.evaluate(v=>{localStorage.removeItem('slotai.view');localStorage.setItem('gastos.v1',JSON.stringify(v));},V1);await q.reload();await q.waitForSelector('.ci');
+  await open();await q.click('#accCard');await q.click('#accDrop button:has-text("Tarjeta")');ok('cajón: elegir cuenta cierra y aplica',await closed()&&(await T('#accName'))==='Tarjeta'&&!!(await q.$('#chart')));
+  await open();await q.click('[data-act="period"][data-p="year"]');ok('cajón: elegir periodo cierra y aplica',await closed()&&/^\d{4}$/.test((await T('#plabel')).trim()));
+  await open();await q.click('[data-act="period"][data-p="range"]');ok('cajón: Intervalo espera a confirmar',!(await closed())&&!!(await q.$('#rApply')));
+  await q.fill('#rfrom','2026-10-02');await q.fill('#rto','2026-10-03');ok('cajón: cambiar fechas no cierra',!(await closed()));
+  await q.click('#rApply');ok('cajón: Aplicar cierra con el intervalo ('+(await T('#plabel'))+')',await closed()&&(await T('#plabel')).includes('2 Oct')&&(await T('#plabel')).includes('3 Oct'));
+  await open();await q.$eval('#pickDate',e=>{e.value='2026-10-05';e.dispatchEvent(new Event('change',{bubbles:true}))});ok('cajón: Elegir fecha cierra',await closed()&&(await T('#plabel')).includes('5 Octubre'));
+  await open();await q.click('#accCard');await q.click('#accDrop button:has-text("Todas las cuentas")');ok('cajón: Todas las cuentas cierra',await closed()&&(await T('#accName'))==='Todas las cuentas');
   await sc.close();}
  // --- aviso de copia al abrir ---
  {const sc=await mk(false,true);const q=await sc.newPage();watch(q);
