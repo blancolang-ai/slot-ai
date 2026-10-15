@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.3.0';
+const APP_VERSION='1.3.1';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -203,7 +203,7 @@ function renderEntry(){
   const disp=ed.expr?esc(ed.expr.replace(/×/g,'*').replace(/÷/g,'/')):'0';
   const c=x.categoryId?cat(x.categoryId):null;
   const keys=['1','2','3','+','4','5','6','-','7','8','9','*',',','0','=','/'];
-  o.innerHTML=`<div class="top etop"><button class="okb" data-eact="ok" id="eOk">OK</button><h1>${title}</h1>
+  o.innerHTML=`<div class="top etop"><button class="ib" data-eact="close" id="eClose" aria-label="Cerrar sin guardar">${U('back','',1.8)}</button><button class="okb" data-eact="ok" id="eOk">OK</button><h1>${title}</h1>
    ${ed.editing?`<button class="ib" data-eact="del" aria-label="Eliminar">${U('trash','',1.4)}</button>`:'<span class="ib"></span>'}
    ${t!=='transfer'?`<button class="ib" data-eact="swap" aria-label="Cambiar a ${t==='expense'?'ingreso':'gasto'}">${U('swap','',1.4)}</button>`:'<span class="ib"></span>'}</div>
    <label class="edate">${U('cal','',1)}<span>${esc(fmtLong(x.date))}</span><input type="date" id="eDate" value="${x.date}" aria-label="Fecha"></label>
@@ -243,7 +243,10 @@ document.addEventListener('click',ev=>{
   else if(a==='pick'){ed.tx.categoryId=b.dataset.cat;ed.picking=false;saveEntry();}
   else if(a==='del'){const id=ed.tx.id;ask({title:'Eliminar transacción',msg:'¿Eliminar esta transacción? Esta acción no se puede deshacer.'}).then(d=>{if(!d)return;Store.remove('transactions',id);closeEntry();render();toast('Eliminada');});}
 });
-window.addEventListener('popstate',()=>{if(ed){ed=null;renderEntry();}const f=$('#form');if(f)f.remove();});
+window.addEventListener('popstate',()=>{const d=$('#dlg');
+  if(d){d._close(null);if(ed)history.pushState({entry:1},'');else if($('#form'))history.pushState({form:1},'');return;}
+  if(ed){ed=null;renderEntry();}const f=$('#form');if(f)f.remove();});
+function closeForm(){const f=$('#form');if(!f)return;f.remove();if(history.state&&history.state.form)history.back();}
 
 // ---------- diálogo de confirmación ----------
 function ask({title,msg,ok='Eliminar',body='',cancel='Cancelar',okOnly=false}){return new Promise(res=>{
@@ -256,11 +259,11 @@ function ask({title,msg,ok='Eliminar',body='',cancel='Cancelar',okOnly=false}){r
 function delAccount(id,name,form){
   const D_=D(),used=D_.transactions.filter(t=>t.accountId===id||t.toAccountId===id),others=D_.accounts.filter(a=>a.id!==id);
   if(!used.length){if(!others.length){ask({title:'No se puede eliminar',msg:'Debe existir al menos una cuenta.',ok:'Entendido',okOnly:true});return;}
-    ask({title:'Eliminar cuenta',msg:'¿Eliminar la cuenta «'+name+'»?'}).then(d=>{if(!d)return;Store.remove('accounts',id);if(st.account===id)st.account='all';form.remove();render();toast('Cuenta eliminada');});return;}
+    ask({title:'Eliminar cuenta',msg:'¿Eliminar la cuenta «'+name+'»?'}).then(d=>{if(!d)return;Store.remove('accounts',id);if(st.account===id)st.account='all';closeForm();render();toast('Cuenta eliminada');});return;}
   if(!others.length){ask({title:'No se puede eliminar',msg:'La cuenta «'+name+'» tiene '+used.length+' transacciones y no hay otra cuenta a la que moverlas. Crea otra cuenta primero.',ok:'Entendido',okOnly:true});return;}
   ask({title:'Eliminar cuenta',ok:'Mover y eliminar',msg:'La cuenta «'+name+'» tiene '+used.length+' transacciones. Se moverán a la cuenta que elijas y después se eliminará la cuenta. Las transferencias entre ambas cuentas se eliminarán.',
     body:`<label class="dlgsel">Mover a<select id="dlgTo">${others.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select></label>`}).then(d=>{if(!d)return;
-    const to=d.querySelector('#dlgTo').value,n=Store.moveAccount(id,to);Store.remove('accounts',id);if(st.account===id)st.account=to;form.remove();render();toast(n+' transacciones movidas · cuenta eliminada');});
+    const to=d.querySelector('#dlgTo').value,n=Store.moveAccount(id,to);Store.remove('accounts',id);if(st.account===id)st.account=to;closeForm();render();toast(n+' transacciones movidas · cuenta eliminada');});
 }
 
 // ---------- formularios: categoría y cuenta ----------
@@ -275,19 +278,19 @@ function openForm(kind,id){
    <label>Icono</label><div class="icongrid">${keys.map(k=>`<button data-f="icon" data-k="${k}" class="${obj.icon===k?'sel':''}" style="color:${isAcc?'#3cbf8f':obj.color}" aria-label="${k}">${I(k,'',1.2)}</button>`).join('')}</div>
    ${isAcc?`<label>Saldo inicial<input id="fInit" inputmode="decimal" value="${fmtNum(obj.initial||0).replace(/\./g,'')}"></label>`:`<label>Color<input type="color" id="fColor" value="${obj.color}"></label>`}
    <button class="btn" data-f="save" id="fSave">Guardar</button>${canDel?`<button class="btn danger" data-f="del" id="fDel">Eliminar</button>`:''}</div>`;};
-  draw();document.body.appendChild(o);
+  draw();const prev=$('#form');if(prev)prev.remove();document.body.appendChild(o);history.pushState({form:1},'');
   o.addEventListener('input',e=>{if(e.target.id==='fName')obj.name=e.target.value;if(e.target.id==='fColor')obj.color=e.target.value;if(e.target.id==='fInit')obj._init=e.target.value;});
   o.addEventListener('click',e=>{const b=e.target.closest('[data-f]');if(!b)return;const f=b.dataset.f;
-    if(f==='close')o.remove();
+    if(f==='close')closeForm();
     if(f==='icon'){obj.icon=b.dataset.k;const iv=$('#fInit')&&$('#fInit').value;draw();if(iv!==false&&$('#fInit'))$('#fInit').value=iv;}
     if(f==='save'){obj.name=$('#fName').value.trim();if(!obj.name){toast('Pon un nombre');return;}
       if(isAcc){obj.initial=Math.round(parseFloat($('#fInit').value.replace(/\./g,'').replace(',','.')||'0')*100)||0;delete obj._init;}else obj.color=$('#fColor').value;
-      Store.upsert(coll,obj);o.remove();render();toast('Guardado');}
+      Store.upsert(coll,obj);closeForm();render();toast('Guardado');}
     if(f==='del'){
       if(isAcc){delAccount(id,obj.name,o);return;}
       const used=D().transactions.some(t=>t.categoryId===id);
       ask({title:'Eliminar categoría',msg:'¿Eliminar la categoría «'+obj.name+'»?'+(used?' Hay transacciones con esta categoría; quedarán como "Sin categoría".':'')}).then(d=>{if(!d)return;
-      Store.remove(coll,id);o.remove();render();toast('Categoría eliminada');});}
+      Store.remove(coll,id);closeForm();render();toast('Categoría eliminada');});}
   });
 }
 
@@ -353,7 +356,7 @@ function bindSwipe(){const el=$('#chart');if(!el)return;let x0=null,y0=null;
 let toastT;function toast(msg,actionLabel,fn){const t=$('#toast');t.innerHTML=esc(msg)+(actionLabel?` <button id="toastBtn">${esc(actionLabel)}</button>`:'');t.classList.remove('hidden');
   if(fn)$('#toastBtn').onclick=fn;clearTimeout(toastT);if(!actionLabel)toastT=setTimeout(()=>t.classList.add('hidden'),2200);}
 window.addEventListener('hashchange',()=>{st.left=st.right=false;render();});
-window.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#dlg'))$('#dlg')._close(null);else if(ed)closeEntry();else if($('#form'))$('#form').remove();else if(st.left||st.right){st.left=st.right=false;render();}}});
+window.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#dlg'))$('#dlg')._close(null);else if(ed)closeEntry();else if($('#form'))closeForm();else if(st.left||st.right){st.left=st.right=false;render();}}});
 
 // ---------- service worker / actualizaciones ----------
 if('serviceWorker' in navigator){

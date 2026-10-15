@@ -71,6 +71,15 @@ process.on('exit',()=>console.log(results.join('\n')));
  await p.click('[data-act="right"]');ok('drawer de cuentas',(await txt('#rightDrawer')).includes('Cuentas')&&(await txt('#rightDrawer')).includes('Efectivo'));
  await p.click('[data-act="newAcc"]');await p.fill('#fName','Local Norte');await p.click('[data-f="icon"][data-k="coins"]');await p.fill('#fInit','100');await p.click('#fSave');
  await p.click('[data-act="right"]');ok('nueva cuenta con saldo 100,00',(await txt('#rightDrawer')).includes('Local Norte')&&(await txt('#rightDrawer')).includes('100,00'));
+ {const nTx=async()=>p.evaluate(()=>JSON.parse(localStorage.getItem('gastos.v1')).transactions.length);const n0=await nTx();
+  await p.click('[data-act="transfer"]');ok('transferencia: botón volver en cabecera',!!(await p.$('#entry #eClose')));await key('5');await p.click('#eClose');ok('transferencia: volver cierra sin cambios',!(await p.$('#entry'))&&(await nTx())===n0);
+  await p.click('[data-act="right"]');await p.click('[data-act="transfer"]');await key('5');await p.keyboard.press('Escape');ok('transferencia: Esc cierra sin cambios',!(await p.$('#entry'))&&(await nTx())===n0);
+  await p.click('[data-act="right"]');await p.click('[data-act="transfer"]');await key('5');await p.goBack();await p.waitForTimeout(200);ok('transferencia: atrás del móvil cierra sin cambios',!(await p.$('#entry'))&&(await nTx())===n0&&p.url().startsWith(URL));
+  await p.click('.circ.m');await key('9');await p.goBack();await p.waitForTimeout(200);ok('gasto: atrás cierra sin cambios',!(await p.$('#entry'))&&(await nTx())===n0);
+  await p.click('.circ.p');await p.click('#eClose');ok('ingreso: volver cierra',!(await p.$('#entry')));
+  await p.click('[data-act="right"]');await p.click('[data-act="newAcc"]');await p.fill('#fName','Nada');await p.goBack();await p.waitForTimeout(200);
+  ok('formulario cuenta: atrás cierra sin guardar',!(await p.$('#form'))&&p.url().startsWith(URL)&&!(await p.evaluate(()=>localStorage.getItem('gastos.v1'))).includes('"Nada"'));
+  await p.click('[data-act="right"]');}
  await p.click('[data-act="transfer"]');ok('pantalla transferencia',(await txt('#entry h1'))==='Transferencia');
  await key('50');await p.selectOption('#eTo',{label:'Local Norte'});await p.click('#eSave');
  ok('total no cambia con transferencia (853,50)',(await txt('#balance')).includes('853,50'));
@@ -103,6 +112,8 @@ process.on('exit',()=>console.log(results.join('\n')));
  await p.fill('#eNote','Nómina');await p.click('#eOk');ok('ingreso editado (nota)',(await txt('.list')).includes('Nómina'));
  await p.click('[data-act="sort"]');const n2=await p.$$eval('.grow .nm',e=>e.map(x=>x.textContent));ok('ordenar por nombre',n2.slice(1,3).join()==='Comida,Ocio');await p.click('[data-act="sort"]');
  await p.click('[data-act="search"]');await p.fill('#q','Merc');ok('búsqueda',(await p.$$('.group')).length===1);await p.click('[data-act="search"]');
+ await p.click('.tx:has-text("Mercadona")');await key('7');await p.click('#eClose');ok('editar: volver no guarda',(await txt('.grow:has-text("Comida")')).includes('125,00')&&!(await p.$('#entry')));
+ await p.click('.tx:has-text("Mercadona")');await p.click('[data-eact="del"]');await p.goBack();await p.waitForTimeout(200);ok('atrás con diálogo abierto: cierra solo el diálogo',!(await p.$('#dlg'))&&!!(await p.$('#entry')));await p.click('#eClose');
  await p.click('.tx:has-text("Mercadona")');await p.click('[data-eact="del"]');ok('confirmar eliminar transacción: diálogo',!!(await p.$('#dlg')));await p.click('#dlgCancel');ok('cancelar no elimina',!(await p.$('#dlg'))&&!!(await p.$('#entry')));
  await p.click('[data-eact="del"]');await p.click('#dlgOk');ok('eliminar',(await p.$$('.grow:has-text("Comida")')).length===0);
  // cambiar tipo
@@ -115,6 +126,9 @@ process.on('exit',()=>console.log(results.join('\n')));
  await p.click('[data-act="right"]');await p.click('.arow:has-text("Temporal")');await p.click('#fDel');ok('cuenta vacía: confirmación',!!(await p.$('#dlg'))&&!(await p.$('#dlgTo')));await p.click('#dlgOk');await p.click('[data-act="right"]');ok('borra cuenta vacía',!(await txt('#rightDrawer')).includes('Temporal'));
  // categorías
  await p.click('[data-act="go"][data-r="/categorias"]');await p.waitForSelector('.tabs');ok('6 categorías de gasto sin añadir '+(await p.$$('.page .grow')).length+' '+!!(await p.$('.fab')),(await p.$$('.page .grow')).length===6&&!(await p.$('.fab')));
+ ok('categorías: flecha volver en cabecera',!!(await p.$('.top [data-act="back"]')));
+ await p.click('.grow:has-text("Otros")');await p.goBack();await p.waitForTimeout(200);ok('categoría: atrás cierra formulario y sigue en categorías',!(await p.$('#form'))&&!!(await p.$('.tabs')));
+ await p.click('.grow:has-text("Otros")');await p.click('[data-f="close"]');ok('categoría: X cierra',!(await p.$('#form'))&&!!(await p.$('.tabs')));
  await p.click('.grow:has-text("Otros")');ok('no se puede eliminar categoría de gasto',!(await p.$('#fDel')));
  await p.fill('#fName','Varios');await p.click('[data-f="icon"][data-k="gift"]');await p.click('#fSave');ok('renombrada',(await txt('.page')).includes('Varios'));
  await p.click('[data-t="income"]');await p.click('.fab');await p.fill('#fName','Extra');await p.click('#fSave');ok('nueva categoría ingreso',(await txt('.page')).includes('Extra'));
