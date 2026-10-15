@@ -1,4 +1,4 @@
-# Gastos – control de gastos personal (PWA tipo Monefy)
+# Slot-AI – control de gastos personal (PWA tipo Monefy)
 
 App web instalable (PWA), sin servidor: todos los datos se guardan **solo en tu móvil** (localStorage del navegador). Funciona sin conexión.
 
@@ -23,7 +23,7 @@ No hay compilación: el sitio es la propia carpeta raíz. Sube el repositorio a 
 
 ## Copias de seguridad
 Los datos viven solo en el navegador del móvil: si borras los datos del navegador o desinstalas la app, se pierden.
-- *Menú ☰ → Ajustes → Copia de seguridad (JSON) → Exportar*: descarga `gastos-copia-AAAA-MM-DD.json`. Guárdalo en Drive, correo, etc.
+- *Menú ☰ → Ajustes → Copia de seguridad (JSON) → Exportar*: descarga `slot-ai-copia-AAAA-MM-DD.json`. Guárdalo en Drive, correo, etc.
 - *Restaurar copia → Importar*: elige el archivo JSON (sustituye todos los datos actuales).
 - *Exportar a CSV*: archivo con `;` y BOM UTF-8, se abre directamente en Excel en español.
 

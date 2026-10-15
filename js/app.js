@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.0.0';
+const APP_VERSION='1.0.1';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -91,7 +91,7 @@ function viewMain(){
   const icons=cats.map((c,i)=>{const ang=-Math.PI/2+i*2*Math.PI/n,r=43;const x=50+r*Math.cos(ang),y=50+r*Math.sin(ang);
     return `<button class="caticon ${sums[c.id]?'':'zero'}" style="left:${x}%;top:${y}%;background:${c.color}" data-act="quick" data-cat="${c.id}" title="${esc(c.name)}">${esc(c.icon)}</button>`;}).join('');
   const b=balance();
-  return topbar('Gastos')+periodBar()+`<div class="chartwrap" id="chart">${donutSvg(parts,exp)}${icons}
+  return topbar('Slot-AI')+periodBar()+`<div class="chartwrap" id="chart">${donutSvg(parts,exp)}${icons}
    <div class="center"><div class="inc" id="totInc">${money(inc)}</div><div class="exp" id="totExp">${money(exp)}</div></div></div>
    <button class="balance" data-act="list" id="balance"><span>Saldo</span><b class="${b<0?'neg':''}">${money(b)}</b></button>
    <div class="bigbtns"><button class="bminus" data-act="add" data-type="expense" aria-label="Añadir gasto">−</button><button class="bplus" data-act="add" data-type="income" aria-label="Añadir ingreso">+</button></div>`;
@@ -131,7 +131,7 @@ function viewCategories(){const t=st.catTab;
   return topbar('Categorías',true)+`<div class="tabs"><button class="${t==='expense'?'on':''}" data-act="catTab" data-t="expense">Gastos</button><button class="${t==='income'?'on':''}" data-act="catTab" data-t="income">Ingresos</button></div>
   <div class="page">${D().categories.filter(c=>c.type===t).map(c=>`<button class="grow" style="border-bottom:1px solid var(--line)" data-act="editCat" data-id="${c.id}"><span class="ci" style="background:${c.color}">${esc(c.icon)}</span><span class="nm">${esc(c.name)}</span></button>`).join('')}</div>
   <button class="fab" data-act="editCat" aria-label="Nueva categoría">+</button>`;}
-function drawer(){return `<div class="drawer" data-act="closeDrawer"><nav><div class="hd">💰 Gastos</div>
+function drawer(){return `<div class="drawer" data-act="closeDrawer"><nav><div class="hd">💰 Slot-AI</div>
   <a href="#/">📊 Resumen</a><a href="#/lista">📋 Transacciones</a><a href="#/cuentas">💳 Cuentas</a><a href="#/categorias">🏷️ Categorías</a><a href="#/ajustes">⚙️ Ajustes</a></nav></div>`;}
 
 // ---------- entrada con calculadora ----------
@@ -258,8 +258,8 @@ document.addEventListener('click',ev=>{
     case 'editAcc':openForm('acc',b.dataset.id);break;
     case 'editCat':openForm('cat',b.dataset.id);break;
     case 'catTab':st.catTab=b.dataset.t;render();break;
-    case 'exportJson':download('gastos-copia-'+stamp()+'.json',Store.exportData(),'application/json');break;
-    case 'exportCsv':download('gastos-'+stamp()+'.csv',csv(),'text/csv;charset=utf-8');break;
+    case 'exportJson':download('slot-ai-copia-'+stamp()+'.json',Store.exportData(),'application/json');break;
+    case 'exportCsv':download('slot-ai-'+stamp()+'.csv',csv(),'text/csv;charset=utf-8');break;
     case 'importJson':$('#fileImport').click();break;
     case 'reset':if(confirm('¿Borrar TODOS los datos? Esta acción no se puede deshacer.')){Store.reset();render();toast('Datos borrados');}break;
   }
