@@ -27,6 +27,21 @@ process.on('exit',()=>console.log(results.join('\n')));
   d=await seed(p,V1);
   ok('v1→v3: cuentas y transferencias conservadas',d.accounts.length===2&&d.transactions.some(t=>t.type==='transfer'));
   ok('v1→v3: Taxi → Otros',d.transactions.find(t=>t.id==='t2').categoryId==='exp-otros');
+  // borrar cuenta con movimientos → mover a otra
+  await p.click('[data-act="right"]');await p.click('.arow:has-text("Tarjeta")');await p.click('#fDel');ok('mover: diálogo con selector',!!(await p.$('#dlg #dlgTo')));
+  await p.selectOption('#dlgTo','cash');await p.click('#dlgOk');
+  let a=await p.evaluate(()=>JSON.parse(localStorage.getItem('gastos.v1')));
+  ok('mover: cuenta eliminada, gastos/ingresos movidos',a.accounts.length===1&&a.transactions.find(t=>t.id==='t2').accountId==='cash'&&a.transactions.find(t=>t.id==='t4').accountId==='cash');
+  ok('mover: transferencia entre ambas eliminada',!a.transactions.some(t=>t.id==='t5')&&a.transactions.length===3);
+  await p.click('[data-act="right"]');await p.click('.arow:has-text("Efectivo")');await p.click('#fDel');
+  ok('única cuenta: explica y cancela',(await p.textContent('#dlg')).includes('no hay otra cuenta')&&!(await p.$('#dlgCancel')));await p.click('#dlgOk');
+  ok('única cuenta sigue',(await p.evaluate(()=>JSON.parse(localStorage.getItem('gastos.v1')).accounts.length))===1);
+  await c.close();}
+ {const c=await mk();const p=await c.newPage();watch(p);
+  const V1b=JSON.parse(JSON.stringify(V1));V1b.transactions.push({id:'t6',type:'transfer',amount:100,date:'2026-10-06',accountId:'cash',toAccountId:'x3',note:''});V1b.accounts.push({id:'x3',name:'Hucha',icon:'💰',initial:0});
+  await seed(p,V1b);await p.click('[data-act="right"]');await p.click('.arow:has-text("Efectivo")');await p.click('#fDel');await p.selectOption('#dlgTo','x3');await p.click('#dlgOk');
+  const a=await p.evaluate(()=>JSON.parse(localStorage.getItem('gastos.v1')));const t5=a.transactions.find(t=>t.id==='t5');
+  ok('mover: transferencia con tercera cuenta se reasigna',t5.accountId==='card'&&t5.toAccountId==='x3'&&!a.transactions.some(t=>t.id==='t6'));
   await c.close();}
  // --- flujo principal ---
  const ctx=await mk();const p=await ctx.newPage();watch(p);
@@ -39,7 +54,7 @@ process.on('exit',()=>console.log(results.join('\n')));
  ok('fuente Pacifico cargada',await p.evaluate(async()=>{await document.fonts.ready;return document.fonts.check('22px Pacifico');}));
  ok('6 iconos SVG de línea alrededor del donut',(await p.$$('.ci svg')).length===6);
  await p.click('.circ.m');ok('título "Nuevo gasto"',(await txt('#entry h1'))==='Nuevo gasto');
- await key('10+2.5');ok('calculadora 10+2,5 = 12,50',(await p.getAttribute('#amt','data-cents'))==='1250'&&(await txt('#amt'))==='10+2,5');
+ ok('tecla decimal muestra coma',(await p.$$('#entry [data-key="."]')).length===0&&(await txt('#entry [data-key=","]'))===',');await key('10+2,5');ok('calculadora 10+2,5 = 12,50',(await p.getAttribute('#amt','data-cents'))==='1250'&&(await txt('#amt'))==='10+2,5');
  await key('=');ok('tecla = evalúa',(await txt('#amt'))==='12,5');
  await p.fill('#eNote','Mercadona');
  await p.click('#eOk');ok('OK sin categoría abre selector (6)',(await p.$$('[data-eact="pick"]')).length===6);
@@ -88,18 +103,22 @@ process.on('exit',()=>console.log(results.join('\n')));
  await p.fill('#eNote','Nómina');await p.click('#eOk');ok('ingreso editado (nota)',(await txt('.list')).includes('Nómina'));
  await p.click('[data-act="sort"]');const n2=await p.$$eval('.grow .nm',e=>e.map(x=>x.textContent));ok('ordenar por nombre',n2.slice(1,3).join()==='Comida,Ocio');await p.click('[data-act="sort"]');
  await p.click('[data-act="search"]');await p.fill('#q','Merc');ok('búsqueda',(await p.$$('.group')).length===1);await p.click('[data-act="search"]');
- await p.click('.tx:has-text("Mercadona")');await p.click('[data-eact="del"]');ok('eliminar',(await p.$$('.grow:has-text("Comida")')).length===0);
+ await p.click('.tx:has-text("Mercadona")');await p.click('[data-eact="del"]');ok('confirmar eliminar transacción: diálogo',!!(await p.$('#dlg')));await p.click('#dlgCancel');ok('cancelar no elimina',!(await p.$('#dlg'))&&!!(await p.$('#entry')));
+ await p.click('[data-eact="del"]');await p.click('#dlgOk');ok('eliminar',(await p.$$('.grow:has-text("Comida")')).length===0);
  // cambiar tipo
  await p.click('.circ.m');await key('7');await p.click('[data-eact="swap"]');ok('cambiar gasto→ingreso',(await txt('#entry h1'))==='Nuevo ingreso');await p.keyboard.press('Escape');ok('Escape cierra entrada',!(await p.$('#entry')));
  // borrar cuenta
- await p.click('[data-act="right"]');await p.click('.arow:has-text("Local Norte")');await p.click('#fDel');ok('no borra cuenta con movimientos',!!(await p.$('#form')));await p.keyboard.press('Escape');
+ await p.click('[data-act="right"]');await p.click('.arow:has-text("Local Norte")');await p.click('#fDel');ok('cuenta con movimientos: diálogo mover',!!(await p.$('#dlg #dlgTo')));
+ await p.keyboard.press('Escape');ok('Escape cierra solo el diálogo',!(await p.$('#dlg'))&&!!(await p.$('#form')));
+ await p.click('#fDel');await p.click('#dlgCancel');ok('cancelar no borra cuenta',(await p.evaluate(()=>JSON.parse(localStorage.getItem('gastos.v1')).accounts.length))===2);await p.keyboard.press('Escape');
  await p.click('[data-act="right"]');await p.click('[data-act="newAcc"]');await p.fill('#fName','Temporal');await p.click('#fSave');
- await p.click('[data-act="right"]');await p.click('.arow:has-text("Temporal")');await p.click('#fDel');await p.click('[data-act="right"]');ok('borra cuenta vacía',!(await txt('#rightDrawer')).includes('Temporal'));
+ await p.click('[data-act="right"]');await p.click('.arow:has-text("Temporal")');await p.click('#fDel');ok('cuenta vacía: confirmación',!!(await p.$('#dlg'))&&!(await p.$('#dlgTo')));await p.click('#dlgOk');await p.click('[data-act="right"]');ok('borra cuenta vacía',!(await txt('#rightDrawer')).includes('Temporal'));
  // categorías
  await p.click('[data-act="go"][data-r="/categorias"]');await p.waitForSelector('.tabs');ok('6 categorías de gasto sin añadir '+(await p.$$('.page .grow')).length+' '+!!(await p.$('.fab')),(await p.$$('.page .grow')).length===6&&!(await p.$('.fab')));
  await p.click('.grow:has-text("Otros")');ok('no se puede eliminar categoría de gasto',!(await p.$('#fDel')));
  await p.fill('#fName','Varios');await p.click('[data-f="icon"][data-k="gift"]');await p.click('#fSave');ok('renombrada',(await txt('.page')).includes('Varios'));
  await p.click('[data-t="income"]');await p.click('.fab');await p.fill('#fName','Extra');await p.click('#fSave');ok('nueva categoría ingreso',(await txt('.page')).includes('Extra'));
+ await p.click('.grow:has-text("Extra")');await p.click('#fDel');ok('categoría: confirmación',!!(await p.$('#dlg')));await p.click('#dlgOk');ok('categoría eliminada',!(await txt('.page')).includes('Extra'));
  await p.goto(URL);await p.waitForSelector('.ci');ok('donut usa nuevo nombre',!!(await p.$('.ci[title="Varios"]')));
  // ajustes / backup
  await p.goto(URL+'#/ajustes');
@@ -107,10 +126,10 @@ process.on('exit',()=>console.log(results.join('\n')));
  const bj=JSON.parse(fs.readFileSync(jp,'utf8'));ok('export JSON v3 con cuentas ('+bj.transactions.length+' tx)',bj.version===3&&bj.accounts.length===2&&bj.transactions.length===3);
  [dl]=await Promise.all([p.waitForEvent('download'),p.click('#btnCsv')]);await dl.saveAs('/tmp/g.csv');const c=fs.readFileSync('/tmp/g.csv','utf8');
  ok('CSV BOM ; con Cuenta y transferencia',c.charCodeAt(0)===0xfeff&&c.includes('Fecha;Tipo;Cuenta;Categoría')&&c.includes('Transferencia;Efectivo;→ Local Norte;50,00'));
- await p.click('[data-act="reset"]');await p.goto(URL);ok('reset',(await txt('#totExp')).includes('0,00'));
- await p.goto(URL+'#/ajustes');await p.setInputFiles('#fileImport',jp);await p.waitForTimeout(300);
+ await p.click('[data-act="reset"]');ok('reset: confirmación',!!(await p.$('#dlg')));await p.click('#dlgOk');await p.goto(URL);ok('reset',(await txt('#totExp')).includes('0,00'));
+ await p.goto(URL+'#/ajustes');await p.setInputFiles('#fileImport',jp);await p.click('#dlgOk');await p.waitForTimeout(300);
  await p.goto(URL);ok('import restaura',(await txt('#totExp')).includes('1.234,00')&&(await txt('#balance')).includes('866,00'));
- fs.writeFileSync('/tmp/v2.json',JSON.stringify(V2));await p.goto(URL+'#/ajustes');await p.setInputFiles('#fileImport','/tmp/v2.json');await p.waitForTimeout(300);
+ fs.writeFileSync('/tmp/v2.json',JSON.stringify(V2));await p.goto(URL+'#/ajustes');await p.setInputFiles('#fileImport','/tmp/v2.json');await p.click('#dlgOk');await p.waitForTimeout(300);
  const d2=await p.evaluate(()=>JSON.parse(localStorage.getItem('gastos.v1')));ok('importar copia v2 migra',d2.version===3&&d2.accounts[0].initial===5000);
  ok('service worker activo',await p.evaluate(async()=>!!(await navigator.serviceWorker.ready).active));
  await p.goto(URL);await ctx.setOffline(true);await p.reload();await p.waitForSelector('.ci');ok('funciona offline',(await txt('#totExp')).includes('15,00'));await ctx.setOffline(false);

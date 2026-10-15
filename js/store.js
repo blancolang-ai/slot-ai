@@ -61,6 +61,8 @@ function save(){data.updated=Date.now();backend.save(data);}
 window.Store={uid,migrate,get data(){return data},save,
   upsert(coll,obj){const a=data[coll];obj.updated=Date.now();if(!obj.id)obj.id=uid();const i=a.findIndex(x=>x.id===obj.id);i>=0?a[i]=obj:a.push(obj);save();return obj;},
   remove(coll,id){if(coll==='categories'&&EXP.some(([e])=>e===id))return;data[coll]=data[coll].filter(x=>x.id!==id);save();},
+  moveAccount(from,to){let n=0;for(const t of data.transactions){let ch=false;if(t.accountId===from){t.accountId=to;ch=true;}if(t.toAccountId===from){t.toAccountId=to;ch=true;}if(ch){n++;t.updated=Date.now();}}
+    data.transactions=data.transactions.filter(t=>!(t.type==='transfer'&&t.accountId===t.toAccountId));save();return n;},
   setSetting(k,v){data.settings[k]=v;save();},
   exportData(){return JSON.stringify({app:'slot-ai',...data},null,1);},
   importData(json){data=migrate(JSON.parse(json));save();},

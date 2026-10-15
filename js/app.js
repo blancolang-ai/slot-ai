@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.2.0';
+const APP_VERSION='1.3.0';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -202,7 +202,7 @@ function renderEntry(){
   }
   const disp=ed.expr?esc(ed.expr.replace(/×/g,'*').replace(/÷/g,'/')):'0';
   const c=x.categoryId?cat(x.categoryId):null;
-  const keys=['1','2','3','+','4','5','6','-','7','8','9','*','.','0','=','/'];
+  const keys=['1','2','3','+','4','5','6','-','7','8','9','*',',','0','=','/'];
   o.innerHTML=`<div class="top etop"><button class="okb" data-eact="ok" id="eOk">OK</button><h1>${title}</h1>
    ${ed.editing?`<button class="ib" data-eact="del" aria-label="Eliminar">${U('trash','',1.4)}</button>`:'<span class="ib"></span>'}
    ${t!=='transfer'?`<button class="ib" data-eact="swap" aria-label="Cambiar a ${t==='expense'?'ingreso':'gasto'}">${U('swap','',1.4)}</button>`:'<span class="ib"></span>'}</div>
@@ -229,7 +229,7 @@ function onKey(k){let e=ed.expr;const op={'+':'+','-':'-','*':'×','/':'÷'}[k];
   if(k==='⌫')e=e.slice(0,-1);
   else if(k==='='){const c=evalExpr(e);e=c>0?exprFromCents(c):'';}
   else if(op){if(!e)return;e=/[-+×÷]$/.test(e)?e.slice(0,-1)+op:e+op;}
-  else if(k==='.'){const last=e.split(/[-+×÷]/).pop();if(last.includes(','))return;e+=last?',':'0,';}
+  else if(k===','||k==='.'){const last=e.split(/[-+×÷]/).pop();if(last.includes(','))return;e+=last?',':'0,';}
   else{const last=e.split(/[-+×÷]/).pop();if(/,\d\d$/.test(last))return;if(e.length>18)return;if(last==='0')e=e.slice(0,-1);e+=k;}
   ed.expr=e;readEntryFields();renderEntry();}
 document.addEventListener('click',ev=>{
@@ -241,9 +241,27 @@ document.addEventListener('click',ev=>{
   else if(a==='unpick'){ed.picking=false;renderEntry();}
   else if(a==='swap'){readEntryFields();ed.tx.type=ed.tx.type==='expense'?'income':'expense';ed.tx.categoryId=null;renderEntry();}
   else if(a==='pick'){ed.tx.categoryId=b.dataset.cat;ed.picking=false;saveEntry();}
-  else if(a==='del'){if(confirm('¿Eliminar esta transacción?')){Store.remove('transactions',ed.tx.id);closeEntry();render();toast('Eliminada');}}
+  else if(a==='del'){const id=ed.tx.id;ask({title:'Eliminar transacción',msg:'¿Eliminar esta transacción? Esta acción no se puede deshacer.'}).then(d=>{if(!d)return;Store.remove('transactions',id);closeEntry();render();toast('Eliminada');});}
 });
 window.addEventListener('popstate',()=>{if(ed){ed=null;renderEntry();}const f=$('#form');if(f)f.remove();});
+
+// ---------- diálogo de confirmación ----------
+function ask({title,msg,ok='Eliminar',body='',cancel='Cancelar',okOnly=false}){return new Promise(res=>{
+  const old=$('#dlg');if(old)old._close(null);
+  const o=document.createElement('div');o.id='dlg';o.className='dlgback';o.setAttribute('role','dialog');o.setAttribute('aria-modal','true');
+  o.innerHTML=`<div class="dlg"><h2>${esc(title)}</h2><p>${esc(msg)}</p>${body}<div class="dlgbtns">${okOnly?'':`<button class="btn flat" id="dlgCancel">${esc(cancel)}</button>`}<button class="btn ${okOnly?'':'danger'}" id="dlgOk">${esc(ok)}</button></div></div>`;
+  o._close=v=>{o.remove();res(v);};
+  o.addEventListener('click',e=>{if(e.target===o||e.target.id==='dlgCancel')o._close(null);else if(e.target.id==='dlgOk')o._close(okOnly?null:o);});
+  document.body.appendChild(o);$('#dlgOk').focus();});}
+function delAccount(id,name,form){
+  const D_=D(),used=D_.transactions.filter(t=>t.accountId===id||t.toAccountId===id),others=D_.accounts.filter(a=>a.id!==id);
+  if(!used.length){if(!others.length){ask({title:'No se puede eliminar',msg:'Debe existir al menos una cuenta.',ok:'Entendido',okOnly:true});return;}
+    ask({title:'Eliminar cuenta',msg:'¿Eliminar la cuenta «'+name+'»?'}).then(d=>{if(!d)return;Store.remove('accounts',id);if(st.account===id)st.account='all';form.remove();render();toast('Cuenta eliminada');});return;}
+  if(!others.length){ask({title:'No se puede eliminar',msg:'La cuenta «'+name+'» tiene '+used.length+' transacciones y no hay otra cuenta a la que moverlas. Crea otra cuenta primero.',ok:'Entendido',okOnly:true});return;}
+  ask({title:'Eliminar cuenta',ok:'Mover y eliminar',msg:'La cuenta «'+name+'» tiene '+used.length+' transacciones. Se moverán a la cuenta que elijas y después se eliminará la cuenta. Las transferencias entre ambas cuentas se eliminarán.',
+    body:`<label class="dlgsel">Mover a<select id="dlgTo">${others.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select></label>`}).then(d=>{if(!d)return;
+    const to=d.querySelector('#dlgTo').value,n=Store.moveAccount(id,to);Store.remove('accounts',id);if(st.account===id)st.account=to;form.remove();render();toast(n+' transacciones movidas · cuenta eliminada');});
+}
 
 // ---------- formularios: categoría y cuenta ----------
 function openForm(kind,id){
@@ -266,11 +284,10 @@ function openForm(kind,id){
       if(isAcc){obj.initial=Math.round(parseFloat($('#fInit').value.replace(/\./g,'').replace(',','.')||'0')*100)||0;delete obj._init;}else obj.color=$('#fColor').value;
       Store.upsert(coll,obj);o.remove();render();toast('Guardado');}
     if(f==='del'){
-      if(isAcc){if(D().accounts.length<=1){toast('Debe existir al menos una cuenta');return;}
-        if(D().transactions.some(t=>t.accountId===id||t.toAccountId===id)){toast('La cuenta tiene transacciones; elimínalas o muévelas antes');return;}
-        if(!confirm('¿Eliminar la cuenta «'+obj.name+'»?'))return;}
-      else if(D().transactions.some(t=>t.categoryId===id)&&!confirm('Hay transacciones con esta categoría; quedarán como "Sin categoría". ¿Continuar?'))return;
-      Store.remove(coll,id);o.remove();render();}
+      if(isAcc){delAccount(id,obj.name,o);return;}
+      const used=D().transactions.some(t=>t.categoryId===id);
+      ask({title:'Eliminar categoría',msg:'¿Eliminar la categoría «'+obj.name+'»?'+(used?' Hay transacciones con esta categoría; quedarán como "Sin categoría".':'')}).then(d=>{if(!d)return;
+      Store.remove(coll,id);o.remove();render();toast('Categoría eliminada');});}
   });
 }
 
@@ -317,7 +334,7 @@ document.addEventListener('click',ev=>{
     case 'exportJson':download('slot-ai-copia-'+stamp()+'.json',Store.exportData(),'application/json');break;
     case 'exportCsv':download('slot-ai-'+stamp()+'.csv',csv(),'text/csv;charset=utf-8');break;
     case 'importJson':$('#fileImport').click();break;
-    case 'reset':if(confirm('¿Borrar TODOS los datos? Esta acción no se puede deshacer.')){Store.reset();st.account='all';render();toast('Datos borrados');}break;
+    case 'reset':ask({title:'Borrar todos los datos',msg:'¿Borrar TODOS los datos? Esta acción no se puede deshacer.',ok:'Borrar'}).then(d=>{if(!d)return;Store.reset();st.account='all';render();toast('Datos borrados');});break;
   }
 });
 document.addEventListener('input',ev=>{if(ev.target.id==='q'){st.q=ev.target.value;st.focusQ=true;render();}});
@@ -328,7 +345,7 @@ document.addEventListener('change',ev=>{const t=ev.target;
   else if(t.id==='setCur'){Store.setSetting('currency',t.value.trim()||'€');render();}
   else if(t.id==='setWeek'){Store.setSetting('weekStart',+t.value);render();}
   else if(t.id==='setDark'){Store.setSetting('dark',t.checked);render();}
-  else if(t.id==='fileImport'&&t.files[0]){const r=new FileReader();r.onload=()=>{try{if(!confirm('Esto sustituirá todos los datos actuales. ¿Continuar?'))return;Store.importData(r.result);st.account='all';render();toast('Copia restaurada');}catch(e){toast('Error: '+e.message);}};r.readAsText(t.files[0]);}
+  else if(t.id==='fileImport'&&t.files[0]){const r=new FileReader();r.onload=()=>{const txt=r.result;t.value='';ask({title:'Restaurar copia',msg:'Esto sustituirá todos los datos actuales. ¿Continuar?',ok:'Restaurar'}).then(d=>{if(!d)return;try{Store.importData(txt);st.account='all';render();toast('Copia restaurada');}catch(e){toast('Error: '+e.message);}});};r.readAsText(t.files[0]);}
 });
 function bindSwipe(){const el=$('#chart');if(!el)return;let x0=null,y0=null;
   el.addEventListener('touchstart',e=>{x0=e.touches[0].clientX;y0=e.touches[0].clientY;},{passive:true});
@@ -336,7 +353,7 @@ function bindSwipe(){const el=$('#chart');if(!el)return;let x0=null,y0=null;
 let toastT;function toast(msg,actionLabel,fn){const t=$('#toast');t.innerHTML=esc(msg)+(actionLabel?` <button id="toastBtn">${esc(actionLabel)}</button>`:'');t.classList.remove('hidden');
   if(fn)$('#toastBtn').onclick=fn;clearTimeout(toastT);if(!actionLabel)toastT=setTimeout(()=>t.classList.add('hidden'),2200);}
 window.addEventListener('hashchange',()=>{st.left=st.right=false;render();});
-window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(ed)closeEntry();else if($('#form'))$('#form').remove();else if(st.left||st.right){st.left=st.right=false;render();}}});
+window.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#dlg'))$('#dlg')._close(null);else if(ed)closeEntry();else if($('#form'))$('#form').remove();else if(st.left||st.right){st.left=st.right=false;render();}}});
 
 // ---------- service worker / actualizaciones ----------
 if('serviceWorker' in navigator){
