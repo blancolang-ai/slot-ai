@@ -2,15 +2,16 @@
 
 App web instalable (PWA), sin servidor: todos los datos se guardan **solo en tu móvil** (localStorage del navegador). Funciona sin conexión.
 
-## Funciones (v1)
-- Pantalla principal con gráfico de donut por categorías, iconos alrededor, ingresos/gastos en el centro y saldo.
-- Botones grandes **−** (gasto) y **+** (ingreso); toca un icono del donut para añadir un gasto directo en esa categoría.
-- Teclado calculadora (+ − × ÷), fecha y nota.
-- Periodos: día, semana, mes, año, todo e intervalo. Desliza el gráfico a izquierda/derecha para cambiar de periodo.
-- Todo es efectivo: un único saldo (con «Saldo inicial» configurable en Ajustes).
-- Lista de transacciones agrupada por categoría (tócala para expandir); toca una transacción para editarla o eliminarla.
-- 6 categorías de gasto fijas (Comida, Casa, Transporte, Ocio, Salud, Otros), renombrables con su emoji y color; categorías de ingreso editables.
-- Ajustes: símbolo de moneda, saldo inicial, primer día de la semana, tema oscuro, copia de seguridad JSON, exportar CSV para Excel.
+## Funciones (v1.2)
+- Estilo Monefy: cabecera verde menta, iconos de línea alrededor de un donut con porcentajes, ingresos/gastos en el centro y botón «Saldo».
+- Botones redondos **−** (gasto) y **+** (ingreso); toca un icono del donut para añadir un gasto directo en esa categoría.
+- Pantalla de entrada con calculadora (+ − * / =), fecha, cuenta, nota; «OK» guarda, papelera elimina, ⇄ cambia gasto/ingreso.
+- **Cuentas** (negocios/locales): crear, renombrar, icono, saldo inicial, eliminar (si no tienen movimientos). Vista «Todas las cuentas» o una cuenta concreta (embudo ▽ de la cabecera).
+- **Transferencias** entre cuentas (⇄ en la cabecera o en el panel de cuentas ⋮); no cuentan como ingreso ni gasto.
+- Periodos: día, semana, mes, año, todo, intervalo y «Elegir fecha» (embudo ▽). Desliza el gráfico para cambiar de periodo.
+- Lista (toca «Saldo»): ingresos primero y luego gastos por importe, con contador; toca para expandir y toca un movimiento para editarlo o eliminarlo. Búsqueda 🔍 y orden por importe/nombre.
+- 6 categorías de gasto fijas (Comida, Casa, Transporte, Ocio, Salud, Otros) renombrables con icono y color; categorías de ingreso editables.
+- Ajustes (⋮ → Ajustes): moneda, primer día de la semana, tema oscuro, copia JSON, CSV para Excel.
 
 ## Publicar en GitHub Pages
 No hay compilación: el sitio es la propia carpeta raíz. Sube el repositorio a GitHub → *Settings → Pages* → rama `main`, carpeta `/ (root)`. Quedará en `https://<usuario>.github.io/<repo>/`. (La carpeta `tests/` no hace falta en producción, pero no molesta.)
@@ -35,4 +36,6 @@ cd tests && npm install && npx playwright install chromium && node e2e.js   # ne
 Capa de datos en `js/store.js` (preparada para añadir sincronización con Google Drive en una versión futura).
 
 ## Migración de datos
-Al abrir la v1.1 con datos de la v1.0 (o importar una copia antigua) se eliminan las cuentas y transferencias, el saldo inicial pasa a ser la suma de los saldos iniciales de las cuentas, y los gastos de categorías que ya no existen pasan a «Otros».
+- Desde la v1.1 (sin cuentas): se crea la cuenta «Efectivo» con el saldo inicial anterior y todos los movimientos pasan a ella.
+- Desde la v1.0: se conservan cuentas y transferencias; los gastos de categorías que ya no existen pasan a «Otros».
+- Las copias JSON antiguas también se migran al importarlas.

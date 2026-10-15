@@ -1,2 +1,2 @@
-{"name":"Slot-AI – Control de gastos","short_name":"Slot-AI","lang":"es","start_url":"./","scope":"./","display":"standalone","background_color":"#ffffff","theme_color":"#3a7bd5",
+{"name":"Slot-AI – Control de gastos","short_name":"Slot-AI","lang":"es","start_url":"./","scope":"./","display":"standalone","background_color":"#f2fcf5","theme_color":"#7cc894",
 "icons":[{"src":"icons/icon-192.png","sizes":"192x192","type":"image/png"},{"src":"icons/icon-512.png","sizes":"512x512","type":"image/png"},{"src":"icons/icon-512-maskable.png","sizes":"512x512","type":"image/png","purpose":"maskable"}]}
