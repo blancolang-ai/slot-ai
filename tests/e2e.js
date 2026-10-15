@@ -167,6 +167,8 @@ process.on('exit',()=>console.log(results.join('\n')));
   await shoot(false);await shoot(true);
  }
  await p.goto(URL);await p.waitForSelector('.ci');for(const w of [360,412]){await p.setViewportSize({width:w,height:760});await p.waitForTimeout(100);const m=await p.$eval('#chart .center',c=>{const s=getComputedStyle(c);return{fs:parseFloat(s.fontSize),tn:s.fontVariantNumeric,fit:[...c.querySelectorAll('.num')].every(d=>d.getBoundingClientRect().width<=c.clientWidth),tf:s.transform}});ok('totales donut legibles a '+w+'px ('+m.fs+'px, tnum, sin escalar)',m.fs>=17.5&&m.fs<=20.5&&m.tn.includes('tabular')&&m.tn.includes('lining')&&m.fit&&/^matrix\(1, 0, 0, 1,/.test(m.tf));}
+ {await p.setViewportSize({width:412,height:760});const r=await p.$$eval('#totInc,#totExp,#balance',els=>els.map(e=>{const n=e.querySelector('.num'),c=e.querySelector('small.c');if(!n||!c)return null;const sn=getComputedStyle(n),sc=getComputedStyle(c);const t=document.createElement('span');t.textContent='0';n.insertBefore(t,c);const bi=t.getBoundingClientRect().bottom,bc=c.getBoundingClientRect().bottom;t.remove();return{ratio:parseFloat(sc.fontSize)/parseFloat(sn.fontSize),same:sc.fontFamily===sn.fontFamily,lining:sc.fontVariantNumeric.includes('lining'),va:sc.verticalAlign,db:Math.abs(bi-bc)};}));
+  ok('céntimos 0,8em, misma fuente y línea base '+JSON.stringify(r),r.every(x=>x&&Math.abs(x.ratio-.8)<.02&&x.same&&x.lining&&x.va==='baseline'&&x.db<2.5));}
  ok('sin errores de consola '+JSON.stringify(errs),errs.length===0);
  console.log(results.join('\n'));console.log(results.filter(r=>r.startsWith('PASS')).length+'/'+results.length+' OK');await b.close();
 })().catch(e=>{console.error(e);process.exit(1)});

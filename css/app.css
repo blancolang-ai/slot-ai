@@ -7,7 +7,7 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;paddin
 input,select{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px}
 svg{display:block}
 #app{max-width:520px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;position:relative}
-small.c{font-size:inherit;font-family:inherit;vertical-align:baseline}
+small.c{font-size:.8em;font-family:inherit;font-weight:inherit;vertical-align:baseline;line-height:1;font-variant-numeric:lining-nums tabular-nums}
 .num,.center,.saldo,.anum,.tx,.grow,.arow{font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1,"tnum" 1}
 .top{background:var(--hdr);color:#fff;padding:calc(env(safe-area-inset-top) + 6px) 6px 6px;display:flex;align-items:center;gap:2px;min-height:56px;position:sticky;top:0;z-index:10}
 .top .ib{width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#fff}

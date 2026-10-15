@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.3.4';
+const APP_VERSION='1.3.5';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -12,7 +12,7 @@ const U=(k,cls,sw)=>svgIcon(UI[k],cls,sw);
 // ---------- formato ----------
 function fmtNum(cents){const neg=cents<0;cents=Math.abs(Math.round(cents));const e=Math.floor(cents/100).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');return (neg?'-':'')+e+','+String(cents%100).padStart(2,'0');}
 const money=c=>fmtNum(c)+'\u00a0'+D().settings.currency;
-function moneyH(c){return `<span class="num">${fmtNum(c)}\u00a0${esc(D().settings.currency)}</span>`;}
+function moneyH(c){const s=fmtNum(c),i=s.lastIndexOf(',');return `<span class="num">${s.slice(0,i)}<small class="c">${s.slice(i)}</small>\u00a0${esc(D().settings.currency)}</span>`;}
 const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const parseIso=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);};
 const fmtDate=s=>{const[y,m,d]=s.split('-');return d+'/'+m+'/'+y;};
