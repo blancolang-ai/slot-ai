@@ -181,6 +181,18 @@ const jp='/tmp/backup.json';await dl.saveAs(jp);
   ok('copia: tras compartir se actualiza «Última copia»',!(await q.textContent('#lastBackup')).includes('Nunca'));
   await q.evaluate(()=>{localStorage.removeItem('slotai.lastBackup');localStorage.setItem('t.abort','1');});await q.reload();await q.click('#btnExport');await q.waitForTimeout(200);
   ok('copia: cancelar compartir no marca copia',(await q.textContent('#lastBackup')).includes('Nunca'));await sc.close();}
+ // --- arranque: periodo Todo y vista recordada ---
+ {const sc=await mk();const q=await sc.newPage();watch(q);const T=x=>q.textContent(x);const isAll=async()=>/\d+ \w+ \d\d - \d+ \w+ \d\d/.test(await T('#plabel'));
+  await q.goto(URL);await q.evaluate(v=>{localStorage.removeItem('slotai.view');localStorage.setItem('gastos.v1',JSON.stringify(v));},V1);await q.reload();await q.waitForSelector('.ci');
+  ok('arranque: periodo Todo y Todas las cuentas',await isAll()&&(await T('#accName'))==='Todas las cuentas');
+  await q.click('[data-act="left"]');await q.click('#accCard');await q.click('#accDrop button:has-text("Tarjeta")');await q.click('[data-act="period"][data-p="month"]');
+  await q.goto(URL+'#/categorias');await q.click('[data-t="income"]');await q.goto(URL);await q.reload();await q.waitForSelector('.ci');
+  ok('arranque: recuerda la cuenta y vuelve a Todo',(await T('#accName'))==='Tarjeta'&&await isAll());
+  await q.goto(URL+'#/categorias');await q.waitForSelector('.tabs');ok('arranque: recuerda la pestaña Ingresos en Categorías',(await q.getAttribute('[data-t="income"]','class')||'').includes('on'));
+  await q.evaluate(()=>{const d=JSON.parse(localStorage.getItem('gastos.v1'));d.accounts=d.accounts.filter(a=>a.id!=='card');d.transactions=d.transactions.filter(t=>t.accountId!=='card'&&t.toAccountId!=='card');localStorage.setItem('gastos.v1',JSON.stringify(d));});
+  await q.goto(URL);await q.reload();await q.waitForSelector('.ci');ok('arranque: cuenta borrada → Todas las cuentas',(await T('#accName'))==='Todas las cuentas');
+  await q.click('[data-act="left"]');await q.click('#accCard');await q.click('#accDrop button:has-text("Todas las cuentas")');await q.reload();await q.waitForSelector('.ci');ok('arranque: recuerda Todas',(await T('#accName'))==='Todas las cuentas');
+  await sc.close();}
  // --- aviso de copia al abrir ---
  {const sc=await mk(false,true);const q=await sc.newPage();watch(q);
   await q.addInitScript(()=>{window.__sh=0;navigator.canShare=()=>true;navigator.share=async()=>{window.__sh++;};});

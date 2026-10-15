@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.4.2';
+const APP_VERSION='1.4.3';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -23,7 +23,8 @@ const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
 function shade(hex,f){const n=parseInt(hex.slice(1),16);const ch=s=>Math.max(0,Math.min(255,Math.round(((n>>s)&255)*f)));return '#'+[16,8,0].map(s=>ch(s).toString(16).padStart(2,'0')).join('');}
 
 // ---------- estado ----------
-const st={ptype:'month',anchor:new Date(),from:iso(new Date()),to:iso(new Date()),account:'all',left:false,right:false,accDrop:false,open:{},catTab:'expense',sort:'amount',searching:false,q:''};
+const VIEWK='slotai.view';const savedView=(()=>{try{return JSON.parse(localStorage.getItem(VIEWK))||{}}catch(e){return{}}})();
+const st={ptype:'all',anchor:new Date(),from:iso(new Date()),to:iso(new Date()),account:typeof savedView.account==='string'?savedView.account:'all',left:false,right:false,accDrop:false,open:{},catTab:savedView.catTab==='income'?'income':'expense',sort:'amount',searching:false,q:''};
 const today=()=>iso(new Date());
 function range(){
   const a=new Date(st.anchor.getFullYear(),st.anchor.getMonth(),st.anchor.getDate());
@@ -68,6 +69,7 @@ const route=()=>(location.hash||'#/').slice(1)||'/';
 function render(){
   document.body.classList.toggle('dark',!!D().settings.dark);
   if(st.account!=='all'&&!D().accounts.some(a=>a.id===st.account))st.account='all';
+  try{localStorage.setItem(VIEWK,JSON.stringify({account:st.account,catTab:st.catTab}));}catch(e){}
   const r=route();
   const v=r==='/lista'?viewList():r==='/ajustes'?viewSettings():r==='/categorias'?viewCategories():viewMain();
   $('#app').innerHTML=v+(st.left?leftDrawer():'')+(st.right?rightDrawer():'');
