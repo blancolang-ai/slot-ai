@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.3.1';
+const APP_VERSION='1.3.2';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -350,7 +350,10 @@ document.addEventListener('change',ev=>{const t=ev.target;
   else if(t.id==='setDark'){Store.setSetting('dark',t.checked);render();}
   else if(t.id==='fileImport'&&t.files[0]){const r=new FileReader();r.onload=()=>{const txt=r.result;t.value='';ask({title:'Restaurar copia',msg:'Esto sustituirá todos los datos actuales. ¿Continuar?',ok:'Restaurar'}).then(d=>{if(!d)return;try{Store.importData(txt);st.account='all';render();toast('Copia restaurada');}catch(e){toast('Error: '+e.message);}});};r.readAsText(t.files[0]);}
 });
-function bindSwipe(){const el=$('#chart');if(!el)return;let x0=null,y0=null;
+function fitCenter(){const c=$('#chart .center');if(!c)return;c.style.fontSize='';let f=parseFloat(getComputedStyle(c).fontSize);
+  while(f>11&&[...c.children].some(d=>d.scrollWidth>c.clientWidth)){f-=.5;c.style.fontSize=f+'px';}}
+window.addEventListener('resize',()=>fitCenter());
+function bindSwipe(){fitCenter();const el=$('#chart');if(!el)return;let x0=null,y0=null;
   el.addEventListener('touchstart',e=>{x0=e.touches[0].clientX;y0=e.touches[0].clientY;},{passive:true});
   el.addEventListener('touchend',e=>{if(x0===null)return;const dx=e.changedTouches[0].clientX-x0,dy=e.changedTouches[0].clientY-y0;x0=null;if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy))shift(dx<0?1:-1);});}
 let toastT;function toast(msg,actionLabel,fn){const t=$('#toast');t.innerHTML=esc(msg)+(actionLabel?` <button id="toastBtn">${esc(actionLabel)}</button>`:'');t.classList.remove('hidden');
