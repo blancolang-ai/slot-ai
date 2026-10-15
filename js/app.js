@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.4.0';
+const APP_VERSION='1.4.1';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -134,9 +134,10 @@ function viewSettings(){const s=D().settings;
   <div class="row"><label for="setCur">Símbolo de moneda</label><input id="setCur" value="${esc(s.currency)}" maxlength="4" style="width:70px;text-align:center"></div>
   <div class="row"><label for="setWeek">Primer día de la semana</label><select id="setWeek"><option value="1" ${s.weekStart==1?'selected':''}>Lunes</option><option value="0" ${s.weekStart==0?'selected':''}>Domingo</option></select></div>
   <div class="row"><label for="setDark">Tema oscuro</label><input type="checkbox" class="switch" id="setDark" ${s.dark?'checked':''}></div>
-  <div class="section">Datos</div>
-  <div class="row"><label>Copia de seguridad (JSON)</label><button class="btn" data-act="exportJson" id="btnExport">Exportar</button></div>
+  <div class="section">Copia de seguridad</div>
+  ${backupCard()}
   <div class="row"><label>Restaurar copia</label><button class="btn" data-act="importJson">Importar</button><input type="file" id="fileImport" accept=".json,application/json" hidden></div>
+  <div class="section">Datos</div>
   <div class="row"><label>Importar de Monefy (CSV)</label><button class="btn" data-act="importMonefy" id="btnMonefy">Importar</button><input type="file" id="fileMonefy" accept=".csv,text/csv,text/plain" hidden></div>
   <div class="row"><label>Exportar a CSV (Excel)</label><button class="btn" data-act="exportCsv" id="btnCsv">CSV</button></div>
   <div class="row"><label>Borrar todos los datos</label><button class="btn danger" data-act="reset">Borrar</button></div>
@@ -267,6 +268,25 @@ function delAccount(id,name,form){
     const to=d.querySelector('#dlgTo').value,n=Store.moveAccount(id,to);Store.remove('accounts',id);if(st.account===id)st.account=to;closeForm();render();toast(n+' transacciones movidas · cuenta eliminada');});
 }
 
+// ---------- copia de seguridad ----------
+const LB='slotai.lastBackup';
+const lastBackup=()=>{try{return localStorage.getItem(LB)}catch(e){return null}};
+function backupCard(){const lb=lastBackup();const days=lb?Math.floor((Date.now()-new Date(lb).getTime())/864e5):null;
+  const when=lb?(()=>{const d=new Date(lb);return fmtLong(iso(d))+', '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');})():'Nunca';
+  const warn=D().transactions.length&&(days===null||days>7);
+  return `<div class="bkcard">
+   <p class="bkinfo">Guarda una copia en Drive, WhatsApp, correo o Archivos.</p>
+   <button class="btn bkbig" data-act="exportJson" id="btnExport">${U('transfer','',1)}Exportar copia</button>
+   <p class="bklast" id="lastBackup">Última copia: <b>${esc(when)}</b></p>
+   ${warn?`<p class="bkwarn" id="backupWarn">${lb?`Hace ${days} días de tu última copia.`:'Aún no has hecho ninguna copia.'} Te recomendamos exportar una ahora.</p>`:''}</div>`;}
+async function exportBackup(){const name='slot-ai-copia-'+stamp()+'.json',json=Store.exportData();
+  const mark=()=>{try{localStorage.setItem(LB,new Date().toISOString());}catch(e){}if(route()==='/ajustes')render();};
+  let file=null;try{file=new File([json],name,{type:'application/json'});}catch(e){}
+  if(file&&navigator.canShare&&navigator.share&&navigator.canShare({files:[file]})){
+    try{await navigator.share({files:[file],title:'Copia de Slot-AI',text:name});mark();toast('Copia compartida');return;}
+    catch(e){if(e&&e.name==='AbortError'){toast('Copia cancelada');return;}}}
+  download(name,json,'application/json');mark();toast('Copia descargada');}
+
 // ---------- importar de Monefy ----------
 function importMonefy(buf){let p;try{p=Monefy.parse(buf);}catch(e){toast('Error: '+e.message);return;}
   if(!p.tx.length){ask({title:'Importar de Monefy',msg:'No se encontraron movimientos en el archivo.',ok:'Entendido',okOnly:true});return;}
@@ -352,7 +372,7 @@ document.addEventListener('click',ev=>{
     case 'edit':openEntry(null,D().transactions.find(x=>x.id===b.dataset.id));break;
     case 'editCat':openForm('cat',b.dataset.id);break;
     case 'catTab':st.catTab=b.dataset.t;render();break;
-    case 'exportJson':download('slot-ai-copia-'+stamp()+'.json',Store.exportData(),'application/json');break;
+    case 'exportJson':exportBackup();break;
     case 'exportCsv':download('slot-ai-'+stamp()+'.csv',csv(),'text/csv;charset=utf-8');break;
     case 'importJson':$('#fileImport').click();break;
     case 'importMonefy':$('#fileMonefy').click();break;

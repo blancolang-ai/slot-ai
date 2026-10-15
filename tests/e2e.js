@@ -136,7 +136,12 @@ process.on('exit',()=>console.log(results.join('\n')));
  await p.goto(URL);await p.waitForSelector('.ci');ok('donut usa nuevo nombre',!!(await p.$('.ci[title="Varios"]')));
  // ajustes / backup
  await p.goto(URL+'#/ajustes');
- let [dl]=await Promise.all([p.waitForEvent('download'),p.click('#btnExport')]);const jp='/tmp/backup.json';await dl.saveAs(jp);
+ ok('copia: sin copia previa → Nunca y aviso',(await txt('#lastBackup')).includes('Nunca')&&!!(await p.$('#backupWarn')));
+ let [dl]=await Promise.all([p.waitForEvent('download'),p.click('#btnExport')]);
+ ok('copia: nombre slot-ai-copia-AAAA-MM-DD.json',/^slot-ai-copia-\d{4}-\d{2}-\d{2}\.json$/.test(dl.suggestedFilename()));await p.waitForTimeout(100);
+ ok('copia: muestra última copia y quita el aviso',!(await txt('#lastBackup')).includes('Nunca')&&!(await p.$('#backupWarn')));
+ await p.evaluate(()=>localStorage.setItem('slotai.lastBackup',new Date(Date.now()-10*864e5).toISOString()));await p.reload();ok('copia: aviso si hace más de 7 días',(await txt('#backupWarn')).includes('10 días'));
+const jp='/tmp/backup.json';await dl.saveAs(jp);
  const bj=JSON.parse(fs.readFileSync(jp,'utf8'));ok('export JSON v3 con cuentas ('+bj.transactions.length+' tx)',bj.version===3&&bj.accounts.length===2&&bj.transactions.length===3);
  [dl]=await Promise.all([p.waitForEvent('download'),p.click('#btnCsv')]);await dl.saveAs('/tmp/g.csv');const c=fs.readFileSync('/tmp/g.csv','utf8');
  ok('CSV BOM ; con Cuenta y transferencia',c.charCodeAt(0)===0xfeff&&c.includes('Fecha;Tipo;Cuenta;Categoría')&&c.includes('Transferencia;Efectivo;→ Local Norte;50,00'));
@@ -169,6 +174,13 @@ process.on('exit',()=>console.log(results.join('\n')));
  await p.goto(URL);await p.waitForSelector('.ci');for(const w of [360,412]){await p.setViewportSize({width:w,height:760});await p.waitForTimeout(100);const m=await p.$eval('#chart .center',c=>{const s=getComputedStyle(c);return{fs:parseFloat(s.fontSize),tn:s.fontVariantNumeric,fit:[...c.querySelectorAll('.num')].every(d=>d.getBoundingClientRect().width<=c.clientWidth),tf:s.transform}});ok('totales donut legibles a '+w+'px ('+m.fs+'px, tnum, sin escalar)',m.fs>=17.5&&m.fs<=20.5&&m.tn.includes('tabular')&&m.tn.includes('lining')&&m.fit&&/^matrix\(1, 0, 0, 1,/.test(m.tf));}
  {await p.setViewportSize({width:412,height:760});const r=await p.$$eval('#totInc,#totExp,#balance',els=>els.map(e=>{const n=e.querySelector('.num'),c=e.querySelector('small.c');if(!n||!c)return null;const sn=getComputedStyle(n),sc=getComputedStyle(c);const t=document.createElement('span');t.textContent='0';n.insertBefore(t,c);const bi=t.getBoundingClientRect().bottom,bc=c.getBoundingClientRect().bottom;t.remove();return{ratio:parseFloat(sc.fontSize)/parseFloat(sn.fontSize),same:sc.fontFamily===sn.fontFamily,lining:sc.fontVariantNumeric.includes('lining'),va:sc.verticalAlign,db:Math.abs(bi-bc)};}));
   ok('céntimos 0,8em, misma fuente y línea base '+JSON.stringify(r),r.every(x=>x&&Math.abs(x.ratio-.8)<.02&&x.same&&x.lining&&x.va==='baseline'&&x.db<2.5));}
+ {const sc=await mk();const q=await sc.newPage();watch(q);
+  await q.addInitScript(()=>{window.__shared=null;navigator.canShare=o=>!!(o&&o.files&&o.files.length);navigator.share=async o=>{if(localStorage.getItem('t.abort'))throw new DOMException('x','AbortError');window.__shared={name:o.files[0].name,type:o.files[0].type,size:o.files[0].size,text:await o.files[0].text()};};});
+  await q.goto(URL+'#/ajustes');await q.waitForSelector('#btnExport');await q.click('#btnExport');await q.waitForFunction(()=>window.__shared);
+  const sh=await q.evaluate(()=>window.__shared);ok('copia: usa Web Share con archivo JSON',/^slot-ai-copia-\d{4}-\d{2}-\d{2}\.json$/.test(sh.name)&&sh.type==='application/json'&&JSON.parse(sh.text).version===3);
+  ok('copia: tras compartir se actualiza «Última copia»',!(await q.textContent('#lastBackup')).includes('Nunca'));
+  await q.evaluate(()=>{localStorage.removeItem('slotai.lastBackup');localStorage.setItem('t.abort','1');});await q.reload();await q.click('#btnExport');await q.waitForTimeout(200);
+  ok('copia: cancelar compartir no marca copia',(await q.textContent('#lastBackup')).includes('Nunca'));await sc.close();}
  // --- importar de Monefy (fixtures sintéticos) ---
  {const M=require('../js/monefy.js');
   ok('monefy: importes',M.parseAmount('-1.234,56')===-123456&&M.parseAmount('-1,234.56')===-123456&&M.parseAmount('27,2')===2720&&M.parseAmount('-27.2')===-2720&&M.parseAmount('1.000.000')===100000000);
