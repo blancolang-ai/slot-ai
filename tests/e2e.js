@@ -14,7 +14,7 @@ const V2={version:2,settings:{currency:'€',weekStart:1,dark:false,initialBalan
 process.on('exit',()=>console.log(results.join('\n')));
 (async()=>{
  const b=await chromium.launch();
- const mk=(dark)=>b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,acceptDownloads:true,locale:'es-ES',timezoneId:'Europe/Madrid'});
+ const mk=async(dark,banner)=>{const c=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,acceptDownloads:true,locale:'es-ES',timezoneId:'Europe/Madrid'});if(!banner)await c.addInitScript(()=>{if(!localStorage.getItem('t.banner'))localStorage.setItem('slotai.backupSnooze',String(Date.now()+864e9));});return c;};
  const errs=[];const watch=p=>{p.on('console',m=>{if(m.type()==='error')errs.push(m.text())});p.on('pageerror',e=>errs.push(e.message));p.on('dialog',d=>d.accept());};
  const seed=async(p,v)=>{await p.goto(URL);await p.evaluate(v=>localStorage.setItem('gastos.v1',JSON.stringify(v)),v);await p.reload();await p.waitForSelector('.ci');return p.evaluate(()=>JSON.parse(localStorage.getItem('gastos.v1')));};
  // --- migraciones ---
@@ -181,6 +181,19 @@ const jp='/tmp/backup.json';await dl.saveAs(jp);
   ok('copia: tras compartir se actualiza «Última copia»',!(await q.textContent('#lastBackup')).includes('Nunca'));
   await q.evaluate(()=>{localStorage.removeItem('slotai.lastBackup');localStorage.setItem('t.abort','1');});await q.reload();await q.click('#btnExport');await q.waitForTimeout(200);
   ok('copia: cancelar compartir no marca copia',(await q.textContent('#lastBackup')).includes('Nunca'));await sc.close();}
+ // --- aviso de copia al abrir ---
+ {const sc=await mk(false,true);const q=await sc.newPage();watch(q);
+  await q.addInitScript(()=>{window.__sh=0;navigator.canShare=()=>true;navigator.share=async()=>{window.__sh++;};});
+  await q.goto(URL);await q.evaluate(()=>localStorage.clear());await q.reload();await q.waitForSelector('.ci');await q.waitForTimeout(900);ok('aviso: sin datos no aparece',!(await q.$('#bkBanner')));
+  await q.evaluate(v=>localStorage.setItem('gastos.v1',JSON.stringify(v)),V1);await q.reload();await q.waitForSelector('#bkBanner');ok('aviso: nunca copiado → aparece',(await q.textContent('#bkBanner')).includes('ninguna copia'));
+  ok('aviso: no bloquea (se puede usar la app)',await q.evaluate(()=>{const r=document.querySelector('[data-act="right"]').getBoundingClientRect();const el=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return !!el.closest('[data-act="right"]');}));
+  await q.click('#bkLater');ok('aviso: Más tarde lo oculta',!(await q.$('#bkBanner')));await q.reload();await q.waitForTimeout(900);ok('aviso: pospuesto 1 día',!(await q.$('#bkBanner')));
+  const sn=await q.evaluate(()=>+localStorage.getItem('slotai.backupSnooze')-Date.now());ok('aviso: pospuesto ~24 h',sn>23*36e5&&sn<=24*36e5);
+  await q.evaluate(()=>{localStorage.removeItem('slotai.backupSnooze');localStorage.setItem('slotai.lastBackup',new Date(Date.now()-9*864e5).toISOString());localStorage.setItem('slotai.lastBackupCount','4');});await q.reload();await q.waitForSelector('#bkBanner');ok('aviso: >7 días',(await q.textContent('#bkBanner')).includes('9 días'));
+  await q.click('#bkNow');await q.waitForTimeout(200);ok('aviso: Exportar copia usa compartir y lo oculta',(await q.evaluate(()=>window.__sh))===1&&!(await q.$('#bkBanner')));
+  await q.reload();await q.waitForTimeout(900);ok('aviso: tras copiar no aparece',!(await q.$('#bkBanner')));
+  await q.evaluate(()=>{const d=JSON.parse(localStorage.getItem('gastos.v1'));for(let i=0;i<31;i++)d.transactions.push({id:'n'+i,type:'expense',amount:100,date:'2026-10-01',accountId:'cash',categoryId:'exp-otros',note:''});localStorage.setItem('gastos.v1',JSON.stringify(d));});await q.reload();await q.waitForSelector('#bkBanner');ok('aviso: >30 movimientos nuevos',(await q.textContent('#bkBanner')).includes('31 movimientos'));
+  await sc.close();}
  // --- importar de Monefy (fixtures sintéticos) ---
  {const M=require('../js/monefy.js');
   ok('monefy: importes',M.parseAmount('-1.234,56')===-123456&&M.parseAmount('-1,234.56')===-123456&&M.parseAmount('27,2')===2720&&M.parseAmount('-27.2')===-2720&&M.parseAmount('1.000.000')===100000000);

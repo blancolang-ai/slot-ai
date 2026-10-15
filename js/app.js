@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.4.1';
+const APP_VERSION='1.4.2';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -280,12 +280,26 @@ function backupCard(){const lb=lastBackup();const days=lb?Math.floor((Date.now()
    <p class="bklast" id="lastBackup">Última copia: <b>${esc(when)}</b></p>
    ${warn?`<p class="bkwarn" id="backupWarn">${lb?`Hace ${days} días de tu última copia.`:'Aún no has hecho ninguna copia.'} Te recomendamos exportar una ahora.</p>`:''}</div>`;}
 async function exportBackup(){const name='slot-ai-copia-'+stamp()+'.json',json=Store.exportData();
-  const mark=()=>{try{localStorage.setItem(LB,new Date().toISOString());}catch(e){}if(route()==='/ajustes')render();};
+  const mark=()=>{try{localStorage.setItem(LB,new Date().toISOString());localStorage.setItem(LB+'Count',String(D().transactions.length));}catch(e){}hideBackupBanner();if(route()==='/ajustes')render();};
   let file=null;try{file=new File([json],name,{type:'application/json'});}catch(e){}
   if(file&&navigator.canShare&&navigator.share&&navigator.canShare({files:[file]})){
     try{await navigator.share({files:[file],title:'Copia de Slot-AI',text:name});mark();toast('Copia compartida');return;}
     catch(e){if(e&&e.name==='AbortError'){toast('Copia cancelada');return;}}}
   download(name,json,'application/json');mark();toast('Copia descargada');}
+
+// Aviso al abrir: sin copia en >7 días (o nunca) o >30 movimientos nuevos desde la última copia.
+const LS=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v);}catch(e){return null}};
+function backupDue(){const n=D().transactions.length;if(!n)return null;
+  const snooze=LS('slotai.backupSnooze');if(snooze&&Date.now()<+snooze)return null;
+  const lb=lastBackup();if(!lb)return 'Aún no has hecho ninguna copia de seguridad.';
+  const days=Math.floor((Date.now()-new Date(lb).getTime())/864e5);if(days>7)return `Hace ${days} días de tu última copia.`;
+  const added=n-(+LS(LB+'Count')||0);if(added>30)return `Has añadido ${added} movimientos desde tu última copia.`;return null;}
+function hideBackupBanner(){const b=$('#bkBanner');if(b)b.remove();}
+function showBackupBanner(){const why=backupDue();if(!why||$('#bkBanner'))return;
+  const b=document.createElement('div');b.id='bkBanner';b.className='bkbanner';b.setAttribute('role','status');
+  b.innerHTML=`<div class="bkt"><b>Copia de seguridad</b><span>${esc(why)}</span></div><div class="bkb"><button id="bkLater">Más tarde</button><button id="bkNow" class="btn">Exportar copia</button></div>`;
+  b.addEventListener('click',e=>{if(e.target.id==='bkLater'){LS('slotai.backupSnooze',String(Date.now()+864e5));hideBackupBanner();}else if(e.target.id==='bkNow')exportBackup();});
+  document.body.appendChild(b);}
 
 // ---------- importar de Monefy ----------
 function importMonefy(buf){let p;try{p=Monefy.parse(buf);}catch(e){toast('Error: '+e.message);return;}
@@ -413,3 +427,5 @@ if('serviceWorker' in navigator){
   const hadController=!!navigator.serviceWorker.controller;let reloaded=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(reloaded||!hadController)return;reloaded=true;location.reload();});
 }
 render();
+setTimeout(showBackupBanner,600);
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persisted().then(p=>p||navigator.storage.persist()).catch(()=>{});}catch(e){}
