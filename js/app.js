@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.4.3';
+const APP_VERSION='1.4.4';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -17,7 +17,8 @@ const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+Stri
 const parseIso=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);};
 const fmtDate=s=>{const[y,m,d]=s.split('-');return d+'/'+m+'/'+y;};
 const fmtShort=s=>{const d=parseIso(s);return d.getDate()+' '+MCORTO[d.getMonth()]+' '+String(d.getFullYear()).slice(2);};
-const fmtDM=s=>{const d=parseIso(s);return d.getDate()+' '+MCORTO[d.getMonth()].toLowerCase();};
+// Fecha de movimiento: «12 mar» este año; «12 mar 25» en años anteriores (o futuros).
+const fmtDM=s=>{const d=parseIso(s);return d.getDate()+' '+MCORTO[d.getMonth()].toLowerCase()+(d.getFullYear()!==new Date().getFullYear()?' '+String(d.getFullYear()).slice(2):'');};
 const fmtLong=s=>{const d=parseIso(s);const m=MESES[d.getMonth()];return DIAS[d.getDay()]+', '+d.getDate()+' '+m[0].toUpperCase()+m.slice(1)+(d.getFullYear()!==new Date().getFullYear()?' '+d.getFullYear():'');};
 const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
 function shade(hex,f){const n=parseInt(hex.slice(1),16);const ch=s=>Math.max(0,Math.min(255,Math.round(((n>>s)&255)*f)));return '#'+[16,8,0].map(s=>ch(s).toString(16).padStart(2,'0')).join('');}

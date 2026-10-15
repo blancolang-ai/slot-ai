@@ -193,6 +193,14 @@ const jp='/tmp/backup.json';await dl.saveAs(jp);
   await q.goto(URL);await q.reload();await q.waitForSelector('.ci');ok('arranque: cuenta borrada → Todas las cuentas',(await T('#accName'))==='Todas las cuentas');
   await q.click('[data-act="left"]');await q.click('#accCard');await q.click('#accDrop button:has-text("Todas las cuentas")');await q.reload();await q.waitForSelector('.ci');ok('arranque: recuerda Todas',(await T('#accName'))==='Todas las cuentas');
   await sc.close();}
+ // --- fechas de movimientos con año ---
+ {const sc=await mk();const q=await sc.newPage();watch(q);const Y=new Date().getFullYear();const yy=String(Y-1).slice(2);
+  const D3=JSON.parse(JSON.stringify(V1));D3.transactions=[{id:'y1',type:'expense',amount:500,date:`${Y-1}-03-12`,accountId:'cash',categoryId:'a',note:'viejo'},{id:'y2',type:'expense',amount:700,date:`${Y}-01-05`,accountId:'cash',categoryId:'a',note:'nuevo'}];
+  await q.goto(URL);await q.evaluate(v=>localStorage.setItem('gastos.v1',JSON.stringify(v)),D3);await q.reload();await q.waitForSelector('.ci');
+  await q.click('#balance');await q.waitForSelector('.group');await q.click('.grow >> nth=0');
+  const dv=(await q.textContent('.tx:has-text("viejo") .d')).trim(),dn=(await q.textContent('.tx:has-text("nuevo") .d')).trim();
+  ok('fechas: año anterior con YY ('+dv+'), año actual sin año ('+dn+')',dv==='12 mar '+yy&&dn==='5 ene');
+  await sc.close();}
  // --- aviso de copia al abrir ---
  {const sc=await mk(false,true);const q=await sc.newPage();watch(q);
   await q.addInitScript(()=>{window.__sh=0;navigator.canShare=()=>true;navigator.share=async()=>{window.__sh++;};});
