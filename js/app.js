@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.0.1';
+const APP_VERSION='1.1.0';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -14,7 +14,7 @@ const fmtDate=s=>{const[y,m,d]=s.split('-');return d+'/'+m+'/'+y;};
 const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
 
 // ---------- estado ----------
-const st={ptype:'month',anchor:new Date(),from:iso(new Date()),to:iso(new Date()),account:'all',drawer:false,open:{},catTab:'expense'};
+const st={ptype:'month',anchor:new Date(),from:iso(new Date()),to:iso(new Date()),drawer:false,open:{},catTab:'expense'};
 
 function range(){
   const a=new Date(st.anchor.getFullYear(),st.anchor.getMonth(),st.anchor.getDate());
@@ -46,27 +46,23 @@ function shift(n){const a=st.anchor;
   else return; render();}
 
 const cat=id=>D().categories.find(c=>c.id===id)||{name:'Sin categoría',icon:'❔',color:'#9e9e9e'};
-const acc=id=>D().accounts.find(a=>a.id===id)||{name:'¿?',icon:'❔'};
-function txInPeriod(){const[f,t]=range();return D().transactions.filter(x=>x.date>=f&&x.date<=t&&(st.account==='all'||x.accountId===st.account||x.toAccountId===st.account));}
+
+function txInPeriod(){const[f,t]=range();return D().transactions.filter(x=>x.date>=f&&x.date<=t&&x.type!=='transfer');}
 function totals(list){let inc=0,exp=0;for(const x of list){if(x.type==='income')inc+=x.amount;else if(x.type==='expense')exp+=x.amount;}return{inc,exp};}
-function accountBalance(id,upto='9999-12-31'){const a=acc(id);let b=a.initial||0;
-  for(const x of D().transactions){if(x.date>upto)continue;
-    if(x.accountId===id){b+=x.type==='income'?x.amount:-x.amount;}
-    if(x.type==='transfer'&&x.toAccountId===id)b+=x.amount;}
-  return b;}
-function balance(){const upto=range()[1];const ids=st.account==='all'?D().accounts.map(a=>a.id):[st.account];return ids.reduce((s,id)=>s+accountBalance(id,upto),0);}
+
+function balance(){const upto=range()[1];let b=D().settings.initialBalance||0;for(const x of D().transactions){if(x.date>upto)continue;if(x.type==='income')b+=x.amount;else if(x.type==='expense')b-=x.amount;}return b;}
 
 // ---------- render ----------
 function route(){return (location.hash||'#/').slice(1);}
 function render(){
   document.body.classList.toggle('dark',!!D().settings.dark);
   const r=route();
-  const v=r==='/lista'?viewList():r==='/ajustes'?viewSettings():r==='/cuentas'?viewAccounts():r==='/categorias'?viewCategories():viewMain();
+  const v=r==='/lista'?viewList():r==='/ajustes'?viewSettings():r==='/categorias'?viewCategories():viewMain();
   $('#app').innerHTML=v+(st.drawer?drawer():'');
   if(r==='/'||r==='')bindSwipe();
 }
-function accountSelect(){return `<select id="accSel" aria-label="Cuenta"><option value="all">Todas las cuentas</option>${D().accounts.map(a=>`<option value="${a.id}" ${st.account===a.id?'selected':''}>${esc(a.icon+' '+a.name)}</option>`).join('')}</select>`;}
-function topbar(title,back){return `<div class="top">${back?`<button class="iconbtn" data-act="back" aria-label="Volver">←</button>`:`<button class="iconbtn" data-act="drawer" aria-label="Menú">☰</button>`}<h1>${title}</h1>${back?'':accountSelect()}${back?'':`<button class="iconbtn" data-act="transfer" title="Transferencia" aria-label="Transferencia">⇄</button>`}</div>`;}
+
+function topbar(title,back){return `<div class="top">${back?`<button class="iconbtn" data-act="back" aria-label="Volver">←</button>`:`<button class="iconbtn" data-act="drawer" aria-label="Menú">☰</button>`}<h1>${title}</h1></div>`;}
 function periodBar(){
   const opts=[['day','Día'],['week','Semana'],['month','Mes'],['year','Año'],['all','Todo'],['range','Intervalo']];
   const nav=!['all','range'].includes(st.ptype);
@@ -88,7 +84,7 @@ function viewMain(){
   const sums={};for(const x of list)if(x.type==='expense')sums[x.categoryId]=(sums[x.categoryId]||0)+x.amount;
   const parts=cats.filter(c=>sums[c.id]).map(c=>({v:sums[c.id],color:c.color}));
   const n=cats.length;
-  const icons=cats.map((c,i)=>{const ang=-Math.PI/2+i*2*Math.PI/n,r=43;const x=50+r*Math.cos(ang),y=50+r*Math.sin(ang);
+  const icons=cats.map((c,i)=>{const ang=-Math.PI/2+i*2*Math.PI/n,r=44;const x=50+r*Math.cos(ang),y=50+r*Math.sin(ang);
     return `<button class="caticon ${sums[c.id]?'':'zero'}" style="left:${x}%;top:${y}%;background:${c.color}" data-act="quick" data-cat="${c.id}" title="${esc(c.name)}">${esc(c.icon)}</button>`;}).join('');
   const b=balance();
   return topbar('Slot-AI')+periodBar()+`<div class="chartwrap" id="chart">${donutSvg(parts,exp)}${icons}
@@ -98,12 +94,12 @@ function viewMain(){
 }
 function viewList(){
   const list=txInPeriod();const{inc,exp}=totals(list);const groups={};
-  for(const x of list){const k=x.type==='transfer'?'__tr':x.categoryId;(groups[k]=groups[k]||{type:x.type,items:[],sum:0}).items.push(x);groups[k].sum+=x.amount;}
-  const keys=Object.keys(groups).sort((a,b)=>{const ga=groups[a],gb=groups[b];const o={income:0,expense:1,transfer:2};return o[ga.type]-o[gb.type]||gb.sum-ga.sum;});
-  const html=keys.map(k=>{const g=groups[k];const c=k==='__tr'?{name:'Transferencias',icon:'⇄',color:'#78909c'}:cat(k);
-    const base=g.type==='income'?inc:exp;const pc=g.type==='transfer'||!base?'':Math.round(g.sum/base*100)+'%';
-    const cls=g.type==='income'?'inc':g.type==='expense'?'exp':'tr';
-    const items=st.open[k]?g.items.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<button class="txrow" data-act="edit" data-id="${x.id}"><span class="d">${fmtDate(x.date)}</span><span class="n">${esc(x.type==='transfer'?acc(x.accountId).name+' → '+acc(x.toAccountId).name:(x.note||acc(x.accountId).name))}</span><span class="amt ${cls}">${money(x.amount)}</span></button>`).join(''):'';
+  for(const x of list){const k=x.categoryId;(groups[k]=groups[k]||{type:x.type,items:[],sum:0}).items.push(x);groups[k].sum+=x.amount;}
+  const keys=Object.keys(groups).sort((a,b)=>{const ga=groups[a],gb=groups[b];const o={income:0,expense:1};return o[ga.type]-o[gb.type]||gb.sum-ga.sum;});
+  const html=keys.map(k=>{const g=groups[k];const c=cat(k);
+    const base=g.type==='income'?inc:exp;const pc=!base?'':Math.round(g.sum/base*100)+'%';
+    const cls=g.type==='income'?'inc':'exp';
+    const items=st.open[k]?g.items.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(x=>`<button class="txrow" data-act="edit" data-id="${x.id}"><span class="d">${fmtDate(x.date)}</span><span class="n">${esc(x.note||'')}</span><span class="amt ${cls}">${money(x.amount)}</span></button>`).join(''):'';
     return `<div class="group"><button class="grow" data-act="toggle" data-k="${k}"><span class="ci" style="background:${c.color}">${esc(c.icon)}</span><span class="nm">${esc(c.name)}</span><span class="pc">${pc}</span><span class="amt ${cls}">${money(g.sum)}</span></button>${items}</div>`;}).join('');
   return topbar('Transacciones',true)+periodBar()+`<div class="page">
    <div class="balance"><span>Ingresos <b class="amt inc">${money(inc)}</b></span><span>Gastos <b class="amt exp">${money(exp)}</b></span></div>
@@ -114,6 +110,7 @@ function viewSettings(){const s=D().settings;
   <div class="section">General</div>
   <div class="row"><label for="setCur">Símbolo de moneda</label><input id="setCur" value="${esc(s.currency)}" maxlength="4" style="width:70px;text-align:center"></div>
   <div class="row"><label for="setWeek">Primer día de la semana</label><select id="setWeek"><option value="1" ${s.weekStart==1?'selected':''}>Lunes</option><option value="0" ${s.weekStart==0?'selected':''}>Domingo</option></select></div>
+  <div class="row"><label for="setInit">Saldo inicial</label><input id="setInit" inputmode="decimal" value="${fmtNum(s.initialBalance||0).replace(/\./g,'')}" style="width:110px;text-align:right"></div>
   <div class="row"><label for="setDark">Tema oscuro</label><input type="checkbox" class="switch" id="setDark" ${s.dark?'checked':''}></div>
   <div class="section">Datos</div>
   <div class="row"><label>Copia de seguridad (JSON)</label><button class="btn" data-act="exportJson" id="btnExport">Exportar</button></div>
@@ -122,17 +119,12 @@ function viewSettings(){const s=D().settings;
   <div class="row"><label>Borrar todos los datos</label><button class="btn danger" data-act="reset">Borrar</button></div>
   <div class="section">Acerca de</div>
   <div class="row"><label>Versión</label><span>${APP_VERSION}</span></div></div>`;}
-function viewAccounts(){
-  const total=D().accounts.reduce((s,a)=>s+accountBalance(a.id),0);
-  return topbar('Cuentas',true)+`<div class="page">${D().accounts.map(a=>{const b=accountBalance(a.id);return `<button class="row" style="width:100%" data-act="editAcc" data-id="${a.id}"><span style="font-size:22px">${esc(a.icon)}</span><label>${esc(a.name)}</label><b class="amt ${b<0?'exp':''}">${money(b)}</b></button>`;}).join('')}
-  <div class="row"><label><b>Total</b></label><b>${money(total)}</b></div>
-  <div class="form"><button class="btn" data-act="transfer">⇄ Nueva transferencia</button></div></div><button class="fab" data-act="editAcc" aria-label="Nueva cuenta">+</button>`;}
 function viewCategories(){const t=st.catTab;
   return topbar('Categorías',true)+`<div class="tabs"><button class="${t==='expense'?'on':''}" data-act="catTab" data-t="expense">Gastos</button><button class="${t==='income'?'on':''}" data-act="catTab" data-t="income">Ingresos</button></div>
   <div class="page">${D().categories.filter(c=>c.type===t).map(c=>`<button class="grow" style="border-bottom:1px solid var(--line)" data-act="editCat" data-id="${c.id}"><span class="ci" style="background:${c.color}">${esc(c.icon)}</span><span class="nm">${esc(c.name)}</span></button>`).join('')}</div>
-  <button class="fab" data-act="editCat" aria-label="Nueva categoría">+</button>`;}
+  ${t==='income'?'<button class="fab" data-act="editCat" aria-label="Nueva categoría">+</button>':'<div class="empty" style="padding:16px">Toca una categoría para cambiarle el nombre, icono o color.</div>'}`;}
 function drawer(){return `<div class="drawer" data-act="closeDrawer"><nav><div class="hd">💰 Slot-AI</div>
-  <a href="#/">📊 Resumen</a><a href="#/lista">📋 Transacciones</a><a href="#/cuentas">💳 Cuentas</a><a href="#/categorias">🏷️ Categorías</a><a href="#/ajustes">⚙️ Ajustes</a></nav></div>`;}
+  <a href="#/">📊 Resumen</a><a href="#/lista">📋 Transacciones</a><a href="#/categorias">🏷️ Categorías</a><a href="#/ajustes">⚙️ Ajustes</a></nav></div>`;}
 
 // ---------- entrada con calculadora ----------
 let ed=null; // {tx, expr, type}
@@ -146,16 +138,14 @@ function evalExpr(e){
 }
 function openEntry(type,tx,presetCat){
   const today=iso(new Date());
-  const defAcc=st.account!=='all'?st.account:(D().accounts[0]||{}).id;
-  tx=tx?{...tx}:{type,amount:0,date:today,accountId:defAcc,note:'',categoryId:presetCat||null,toAccountId:type==='transfer'?(D().accounts.find(a=>a.id!==defAcc)||{}).id:undefined};
+  tx=tx?{...tx}:{type,amount:0,date:today,note:'',categoryId:presetCat||null};
   ed={tx,expr:tx.amount?fmtNum(tx.amount).replace(/\./g,''):'',editing:!!tx.id,picking:false};
   renderEntry();
 }
 function renderEntry(){
   let o=$('#entry');if(!o){o=document.createElement('div');o.id='entry';document.body.appendChild(o);}
   if(!ed){o.remove();return;}
-  const x=ed.tx,t=x.type;const title=(ed.editing?'Editar ':'Nuevo ')+(t==='expense'?'gasto':t==='income'?'ingreso':'transferencia');
-  const accOpts=sel=>D().accounts.map(a=>`<option value="${a.id}" ${sel===a.id?'selected':''}>${esc(a.icon+' '+a.name)}</option>`).join('');
+  const x=ed.tx,t=x.type;const title=(ed.editing?'Editar ':'Nuevo ')+(t==='expense'?'gasto':'ingreso');
   const val=evalExpr(ed.expr);
   let body;
   if(ed.picking){
@@ -165,27 +155,23 @@ function renderEntry(){
     const c=x.categoryId?cat(x.categoryId):null;
     body=`<div class="amount" id="amt"><small>${/[-+×÷]/.test(ed.expr.replace(/^-/,''))?esc(ed.expr):''}</small>${money(val)}</div>
     <div class="fields">
-     <select id="eAcc" aria-label="Cuenta">${accOpts(x.accountId)}</select>
-     <input type="date" id="eDate" value="${x.date}" aria-label="Fecha">
-     ${t==='transfer'?`<select id="eTo" class="full" aria-label="Cuenta destino">${accOpts(x.toAccountId)}</select>`:''}
+     <input type="date" id="eDate" class="full" value="${x.date}" aria-label="Fecha">
      <input id="eNote" class="full" placeholder="Nota" value="${esc(x.note)}">
-     ${ed.editing&&t!=='transfer'?`<div class="full">Categoría: <b>${esc(c?c.icon+' '+c.name:'—')}</b></div>`:''}
+     ${ed.editing?`<div class="full">Categoría: <b>${esc(c?c.icon+' '+c.name:'—')}</b></div>`:''}
     </div>
     <div class="keypad">${keys.map(k=>`<button data-key="${k}" class="${/[÷×−+⌫]/.test(k)?'op':''}">${k}</button>`).join('')}</div>
     ${ed.editing?`<div style="display:flex"><button class="action" style="flex:1;background:#757575" data-eact="del">ELIMINAR</button><button class="action" style="flex:2" data-eact="save" id="eSave">GUARDAR</button></div>`
-     :t==='transfer'?`<button class="action" data-eact="save" id="eSave">TRANSFERIR</button>`
      :x.categoryId?`<button class="action" data-eact="save" id="eSave">GUARDAR EN ${esc(c.name.toUpperCase())}</button>`
      :`<button class="action" data-eact="choose" id="eChoose">ELEGIR CATEGORÍA</button>`}`;
   }
   o.className='overlay '+t;
-  o.innerHTML=`<div class="top"><button class="iconbtn" data-eact="${ed.picking?'unpick':'close'}" aria-label="Cerrar">${ed.picking?'←':'✕'}</button><h1>${ed.picking?'Elegir categoría':title}</h1>${ed.editing&&!ed.picking&&t!=='transfer'?`<button class="iconbtn" data-eact="choose" aria-label="Cambiar categoría">🏷️</button>`:''}</div>${body}`;
+  o.innerHTML=`<div class="top"><button class="iconbtn" data-eact="${ed.picking?'unpick':'close'}" aria-label="Cerrar">${ed.picking?'←':'✕'}</button><h1>${ed.picking?'Elegir categoría':title}</h1>${ed.editing&&!ed.picking?`<button class="iconbtn" data-eact="choose" aria-label="Cambiar categoría">🏷️</button>`:''}</div>${body}`;
 }
 function readEntryFields(){const x=ed.tx;const g=id=>document.getElementById(id);
-  if(g('eAcc'))x.accountId=g('eAcc').value;if(g('eDate')&&g('eDate').value)x.date=g('eDate').value;if(g('eNote'))x.note=g('eNote').value;if(g('eTo'))x.toAccountId=g('eTo').value;}
+  if(g('eDate')&&g('eDate').value)x.date=g('eDate').value;if(g('eNote'))x.note=g('eNote').value;}
 function saveEntry(){readEntryFields();const x=ed.tx;x.amount=evalExpr(ed.expr);
   if(x.amount<=0){toast('Introduce un importe');return;}
-  if(x.type==='transfer'&&x.accountId===x.toAccountId){toast('Elige dos cuentas distintas');return;}
-  if(x.type!=='transfer'&&!x.categoryId){ed.picking=true;renderEntry();return;}
+  if(!x.categoryId){ed.picking=true;renderEntry();return;}
   Store.upsert('transactions',x);ed=null;renderEntry();render();toast('Guardado');}
 function onKey(k){let e=ed.expr;
   if(k==='⌫')e=e.slice(0,-1);
@@ -204,26 +190,23 @@ document.addEventListener('click',ev=>{
   else if(a==='del'){if(confirm('¿Eliminar esta transacción?')){Store.remove('transactions',ed.tx.id);ed=null;renderEntry();render();toast('Eliminada');}}
 });
 
-// ---------- formularios cuenta / categoría ----------
-function openForm(kind,id){
-  const isAcc=kind==='acc';const obj=id?{...D()[isAcc?'accounts':'categories'].find(x=>x.id===id)}:(isAcc?{name:'',icon:'🏦',initial:0}:{name:'',icon:'⭐',color:'#90a4ae',type:st.catTab});
+// ---------- formulario de categoría ----------
+function openForm(id){
+  const obj=id?{...D().categories.find(x=>x.id===id)}:{name:'',icon:'⭐',color:'#90a4ae',type:'income'};
+  const canDel=id&&obj.type==='income';
   const o=document.createElement('div');o.id='form';o.className='overlay';
-  o.innerHTML=`<div class="top"><button class="iconbtn" data-f="close">✕</button><h1>${id?'Editar':'Nueva'} ${isAcc?'cuenta':'categoría'}</h1></div><div class="form">
-   <label>Nombre<input id="fName" value="${esc(obj.name)}"></label>
+  o.innerHTML=`<div class="top"><button class="iconbtn" data-f="close">✕</button><h1>${id?'Editar':'Nueva'} categoría</h1></div><div class="form">
+   <label>Nombre<input id="fName" value="${esc(obj.name)}" maxlength="24"></label>
    <label>Icono (emoji)<input id="fIcon" value="${esc(obj.icon)}" maxlength="4"></label>
-   ${isAcc?`<label>Saldo inicial<input id="fInit" inputmode="decimal" value="${fmtNum(obj.initial||0).replace(/\./g,'')}"></label>`:`<label>Color<input type="color" id="fColor" value="${obj.color}"></label>`}
-   <button class="btn" data-f="save" id="fSave">Guardar</button>${id?`<button class="btn danger" data-f="del">Eliminar</button>`:''}</div>`;
+   <label>Color<input type="color" id="fColor" value="${obj.color}"></label>
+   <button class="btn" data-f="save" id="fSave">Guardar</button>${canDel?`<button class="btn danger" data-f="del">Eliminar</button>`:''}</div>`;
   document.body.appendChild(o);
   o.addEventListener('click',e=>{const b=e.target.closest('[data-f]');if(!b)return;const f=b.dataset.f;
     if(f==='close')o.remove();
     if(f==='save'){obj.name=$('#fName').value.trim();obj.icon=$('#fIcon').value.trim()||'⭐';if(!obj.name){toast('Pon un nombre');return;}
-      if(isAcc)obj.initial=Math.round(parseFloat($('#fInit').value.replace(/\./g,'').replace(',','.')||'0')*100)||0;else obj.color=$('#fColor').value;
-      Store.upsert(isAcc?'accounts':'categories',obj);o.remove();render();}
-    if(f==='del'){
-      if(isAcc){if(D().accounts.length<=1){toast('Debe existir al menos una cuenta');return;}
-        if(D().transactions.some(t=>t.accountId===id||t.toAccountId===id)){toast('La cuenta tiene transacciones; elimínalas antes');return;}}
-      else if(D().transactions.some(t=>t.categoryId===id)&&!confirm('Hay transacciones con esta categoría; quedarán como "Sin categoría". ¿Continuar?'))return;
-      Store.remove(isAcc?'accounts':'categories',id);if(st.account===id)st.account='all';o.remove();render();}
+      obj.color=$('#fColor').value;Store.upsert('categories',obj);o.remove();render();}
+    if(f==='del'){if(D().transactions.some(t=>t.categoryId===id)&&!confirm('Hay transacciones con esta categoría; quedarán como "Sin categoría". ¿Continuar?'))return;
+      Store.remove('categories',id);o.remove();render();}
   });
 }
 
@@ -231,11 +214,11 @@ function openForm(kind,id){
 function download(name,content,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);}
 function csv(){
   const q=v=>{v=String(v??'');return /[;"\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
-  const rows=[['Fecha','Tipo','Cuenta','Categoría','Importe','Moneda','Nota']];
-  const tipos={expense:'Gasto',income:'Ingreso',transfer:'Transferencia'};
-  for(const x of D().transactions.slice().sort((a,b)=>a.date.localeCompare(b.date))){
+  const rows=[['Fecha','Tipo','Categoría','Importe','Moneda','Nota']];
+  const tipos={expense:'Gasto',income:'Ingreso'};
+  for(const x of D().transactions.filter(x=>x.type!=='transfer').sort((a,b)=>a.date.localeCompare(b.date))){
     const amt=x.type==='expense'?-x.amount:x.amount;
-    rows.push([fmtDate(x.date),tipos[x.type],acc(x.accountId).name,x.type==='transfer'?'→ '+acc(x.toAccountId).name:cat(x.categoryId).name,fmtNum(amt).replace(/\./g,''),D().settings.currency,x.note]);}
+    rows.push([fmtDate(x.date),tipos[x.type],cat(x.categoryId).name,fmtNum(amt).replace(/\./g,''),D().settings.currency,x.note]);}
   return '\ufeff'+rows.map(r=>r.map(q).join(';')).join('\r\n');
 }
 const stamp=()=>iso(new Date());
@@ -251,12 +234,10 @@ document.addEventListener('click',ev=>{
     case 'prev':shift(-1);break;case 'next':shift(1);break;
     case 'add':openEntry(b.dataset.type);break;
     case 'quick':openEntry('expense',null,b.dataset.cat);break;
-    case 'transfer':if(D().accounts.length<2){toast('Necesitas al menos dos cuentas');break;}openEntry('transfer');break;
     case 'list':location.hash='#/lista';break;
     case 'toggle':st.open[b.dataset.k]=!st.open[b.dataset.k];render();break;
     case 'edit':openEntry(null,D().transactions.find(x=>x.id===b.dataset.id));break;
-    case 'editAcc':openForm('acc',b.dataset.id);break;
-    case 'editCat':openForm('cat',b.dataset.id);break;
+    case 'editCat':openForm(b.dataset.id);break;
     case 'catTab':st.catTab=b.dataset.t;render();break;
     case 'exportJson':download('slot-ai-copia-'+stamp()+'.json',Store.exportData(),'application/json');break;
     case 'exportCsv':download('slot-ai-'+stamp()+'.csv',csv(),'text/csv;charset=utf-8');break;
@@ -265,11 +246,11 @@ document.addEventListener('click',ev=>{
   }
 });
 document.addEventListener('change',ev=>{const t=ev.target;
-  if(t.id==='accSel'){st.account=t.value;render();}
-  else if(t.id==='ptype'){st.ptype=t.value;if(t.value==='range'){st.from=iso(new Date(st.anchor.getFullYear(),st.anchor.getMonth(),1));st.to=iso(new Date());}render();}
+  if(t.id==='ptype'){st.ptype=t.value;if(t.value==='range'){st.from=iso(new Date(st.anchor.getFullYear(),st.anchor.getMonth(),1));st.to=iso(new Date());}render();}
   else if(t.id==='rfrom'||t.id==='rto'){st[t.id==='rfrom'?'from':'to']=t.value;if(st.from>st.to)[st.from,st.to]=[st.to,st.from];render();}
   else if(t.id==='setCur'){Store.setSetting('currency',t.value.trim()||'€');render();}
   else if(t.id==='setWeek'){Store.setSetting('weekStart',+t.value);render();}
+  else if(t.id==='setInit'){Store.setSetting('initialBalance',Math.round(parseFloat(t.value.replace(/\./g,'').replace(',','.')||'0')*100)||0);render();}
   else if(t.id==='setDark'){Store.setSetting('dark',t.checked);render();}
   else if(t.id==='fileImport'&&t.files[0]){const r=new FileReader();r.onload=()=>{try{if(!confirm('Esto sustituirá todos los datos actuales. ¿Continuar?'))return;Store.importData(r.result);render();toast('Copia restaurada');}catch(e){toast('Error: '+e.message);}};r.readAsText(t.files[0]);}
 });
@@ -290,7 +271,7 @@ if('serviceWorker' in navigator){
     setInterval(()=>reg.update(),60*60*1000);
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update();});
   }).catch(e=>console.warn('SW',e));
-  let reloaded=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(reloaded)return;reloaded=true;location.reload();});
+  const hadController=!!navigator.serviceWorker.controller;let reloaded=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(reloaded||!hadController)return;reloaded=true;location.reload();});
 }
-Store.onChange=null;
+
 render();

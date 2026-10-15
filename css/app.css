@@ -16,7 +16,7 @@ input,select{font:inherit;color:var(--fg);background:var(--card);border:1px soli
 .period select option{color:#000}
 .chartwrap{position:relative;width:100%;aspect-ratio:1/1;max-width:420px;margin:6px auto 0;touch-action:pan-y}
 .chartwrap svg{position:absolute;inset:0;width:100%;height:100%}
-.caticon{position:absolute;width:11%;aspect-ratio:1;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:clamp(16px,5vw,22px);transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.caticon{position:absolute;width:14%;aspect-ratio:1;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:clamp(20px,7vw,30px);transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.25)}
 .caticon.zero{opacity:.45}
 .center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;font-weight:600;line-height:1.5}
 .center .inc{color:var(--green);font-size:17px}.center .exp{color:var(--red);font-size:17px}
