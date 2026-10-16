@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.6.2';
+const APP_VERSION='1.6.3';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -10,7 +10,9 @@ const I=(k,cls,sw)=>svgIcon(ICONS[k]||ICONS.tag,cls,sw);
 const U=(k,cls,sw)=>svgIcon(UI[k],cls,sw);
 
 // ---------- formato ----------
-function fmtNum(cents){const neg=cents<0;cents=Math.abs(Math.round(cents));const e=Math.floor(cents/100).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');return (neg?'-':'')+e+','+String(cents%100).padStart(2,'0');}
+function fmtNum(cents){cents=Math.round(+cents||0);const neg=cents<0;cents=Math.abs(cents);const e=Math.floor(cents/100).toString().replace(/\B(?=(\d{3})+(?!\d))/g,'.');return (neg?'-':'')+e+','+String(cents%100).padStart(2,'0');}
+// Signo de un saldo tras redondear a céntimos: -0 y -0,001 céntimos son 0 (neutro).
+const sgn=c=>{const r=Math.round(+c||0);return r<0?'neg':r>0?'pos':'zero';};
 const money=c=>fmtNum(c)+'\u00a0'+D().settings.currency;
 function moneyH(c){const s=fmtNum(c),i=s.lastIndexOf(',');return `<span class="num">${s.slice(0,i)}<small class="c">${s.slice(i)}</small>\u00a0${esc(D().settings.currency)}</span>`;}
 const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -89,7 +91,7 @@ function subHeader(title){return `<div class="top"><button class="ib" data-act="
 function dateLine(){const nav=!['all','range'].includes(st.ptype);
   return `<div class="dateline"><button class="ar" data-act="prev" aria-label="Anterior" ${nav?'':'style="visibility:hidden"'}>‹</button><span id="plabel">${esc(periodLabel())}</span><button class="ar" data-act="next" aria-label="Siguiente" ${nav?'':'style="visibility:hidden"'}>›</button></div>`;}
 function bigButtons(){return `<div class="bigbtns"><button class="circ m" data-act="add" data-type="expense" aria-label="Añadir gasto">${svgIcon('<path d="M4 12h16"/>','',3)}</button><button class="circ p" data-act="add" data-type="income" aria-label="Añadir ingreso">${svgIcon(UI.plus,'',3)}</button></div>`;}
-function saldoBtn(act){const b=balance();return `<button class="saldo" id="balance" data-act="${act}">Saldo <b>${moneyH(b)}</b></button>`;}
+function saldoBtn(act){const b=balance();return `<button class="saldo ${sgn(b)}" id="balance" data-act="${act}">Saldo <b>${moneyH(b)}</b></button>`;}
 
 function viewMain(){
   const list=txInPeriod(),{inc,exp}=totals(list);
@@ -170,7 +172,7 @@ function rightDrawer(){
   return `<div class="dim r" data-act="closeDrawers"><div class="panel right" id="rightDrawer">
    <div class="hd">${I('wallet','',1.4)}Cuentas</div>
    <div class="add"><span>Añadir</span><button data-act="transfer" aria-label="Nueva transferencia">${U('transfer','',1.3)}</button><button data-act="newAcc" aria-label="Nueva cuenta">${U('plus','',1.3)}</button></div>
-   ${D().accounts.map(a=>`<button class="arow ${st.account===a.id?'sel':''}" data-act="editAcc" data-id="${esc(a.id)}">${I(a.icon,'',1.1)}<span class="t">${esc(a.name)}<span class="ab">${moneyH(accountBalance(a.id))}</span></span></button>`).join('')}
+   ${D().accounts.map(a=>`<button class="arow ${st.account===a.id?'sel':''}" data-act="editAcc" data-id="${esc(a.id)}">${I(a.icon,'',1.1)}<span class="t">${esc(a.name)}<span class="ab ${sgn(accountBalance(a.id))}">${moneyH(accountBalance(a.id))}</span></span></button>`).join('')}
    <div class="sep"></div>
    <button class="arow" data-act="go" data-r="/categorias">${U('tags','',1.2)}<span class="t">Categorías</span></button>
    <button class="arow" data-act="go" data-r="/ajustes">${U('gear','',1.2)}<span class="t">Ajustes</span></button>
@@ -335,7 +337,7 @@ function importMonefy(buf){let p;try{p=Monefy.parse(buf);}catch(e){toast('Error:
   const li=(a,f)=>a.map(f).join('');
   const body=`<div class="mfprev" id="mfPrev">
    <p><b>${s.n}</b> movimientos · ${esc(fmtLong(s.from))} – ${esc(fmtLong(s.to))}${s.transfers?` · <b>${s.transfers}</b> transferencias`:''}${p.errors.length?`<br><span class="exp">${p.errors.length} filas ignoradas (líneas ${p.errors.slice(0,5).join(', ')}${p.errors.length>5?'…':''})</span>`:''}</p>
-   <h3>Cuentas (${p.accounts.length})</h3><ul>${li(s.perAccount,a=>`<li>${esc(a.name)} <span>${a.n} · ${eur(a.balance)}</span></li>`)}</ul>
+   <h3>Cuentas (${p.accounts.length})</h3><ul>${li(s.perAccount,a=>`<li>${esc(a.name)} <span>${a.n} · <span class="bal ${sgn(a.balance)}">${eur(a.balance)}</span></span></li>`)}</ul>
    <h3>Gastos (${s.expense.length} categorías)</h3><ul>${li(s.expense,e=>`<li>${esc(e.name)} <span>${e.n} · <span class="exp">${eur(e.total)}</span></span></li>`)}</ul>
    <h3>Ingresos</h3><ul>${li(s.income,e=>`<li>${esc(e.name)} <span>${e.n} · <span class="inc">${eur(e.total)}</span></span></li>`)}</ul>
    <label class="mfmode"><input type="radio" name="mfMode" value="replace" checked> Reemplazar mis datos</label>
