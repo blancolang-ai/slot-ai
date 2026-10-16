@@ -14,20 +14,30 @@ function parseRows(text,sep){const rows=[];let row=[],f='',q=false;
     else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(f);f='';if(row.some(x=>x.trim()))rows.push(row);row=[];}
     else f+=ch;}
   row.push(f);if(row.some(x=>x.trim()))rows.push(row);return rows;}
-// Importe → céntimos. Admite 1.234,56 / 1,234.56 / -27.2 / 27,2 / "−14 €".
-function parseAmount(s){s=String(s||'').replace(/[\u2212\u2012\u2013]/g,'-').replace(/[^\d,.\-+]/g,'');if(!s)return NaN;
-  const neg=s.includes('-');s=s.replace(/[-+]/g,'');const lc=s.lastIndexOf(','),ld=s.lastIndexOf('.');
-  if(lc>=0&&ld>=0){const dec=lc>ld?',':'.';s=s.split(dec==='.'?',':'.').join('').replace(dec,'.');}
-  else if(lc>=0){s=/^\d{1,3}(,\d{3})+$/.test(s)&&s.split(',').length>2?s.replace(/,/g,''):s.replace(/,/g,(m,o)=>o===lc?'.':'');}
-  else if(ld>=0&&s.split('.').length>2)s=s.replace(/\./g,'');
-  const v=Math.round(parseFloat(s)*100);return isNaN(v)?NaN:(neg?-v:v);}
+// Importe → céntimos enteros (sin coma flotante). Admite 1.234,56 / 1,234.56 / -27.2 / 27,2 / "−14 €" / (14,00) / 1 234,56.
+// Un único separador seguido de exactamente 3 cifras (1.234 / 1,234) se toma como separador de miles.
+function parseAmount(s){s=String(s??'').trim();const paren=/^\(.*\)$/.test(s);
+  s=s.replace(/[\u2212\u2012\u2013\u2014]/g,'-').replace(/[^\d,.\-+]/g,'');if(!/\d/.test(s))return NaN;
+  const neg=paren||/^[+]?-|-$/.test(s)||(s.match(/-/g)||[]).length===1;if(/\d[-+]\d/.test(s))return NaN;s=s.replace(/[-+]/g,'');
+  const lc=s.lastIndexOf(','),ld=s.lastIndexOf('.');let ip,fp='';
+  if(lc>=0&&ld>=0){const dec=lc>ld?',':'.',th=dec===','?'.':',';const i=s.lastIndexOf(dec);ip=s.slice(0,i).split(th).join('');fp=s.slice(i+1);
+    if(ip.includes(dec))return NaN;}
+  else if(lc>=0||ld>=0){const sep=lc>=0?',':'.',parts=s.split(sep);
+    if(parts.length>2){if(!parts.slice(1).every(x=>x.length===3))return NaN;ip=parts.join('');}
+    else if(parts[1].length===3&&/^[1-9]\d{0,2}$/.test(parts[0])){ip=parts.join('');}
+    else{ip=parts[0];fp=parts[1];}}
+  else ip=s;
+  if(!/^\d*$/.test(ip)||!/^\d*$/.test(fp)||(!ip&&!fp))return NaN;
+  let c=BigInt(ip||'0')*100n+BigInt((fp+'00').slice(0,2)||'0');if(fp.length>2&&+fp[2]>=5)c+=1n; // redondeo a céntimos (mitad hacia arriba)
+  if(c>BigInt(Number.MAX_SAFE_INTEGER))return NaN;const v=Number(c);return neg&&v?-v:v;}
 const pad=n=>String(n).padStart(2,'0');
 function dateParser(samples){let dmy=0,mdy=0;
   for(const s of samples){const m=String(s).trim().match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/);if(!m)continue;if(+m[1]>12)dmy++;if(+m[2]>12)mdy++;}
   const md=mdy>dmy;
-  return s=>{s=String(s).trim();let m=s.match(/^(\d{4})[\/.\-](\d{1,2})[\/.\-](\d{1,2})/);if(m)return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+  return s=>{s=String(s).trim();let m=s.match(/^(\d{4})[\/.\-](\d{1,2})[\/.\-](\d{1,2})/);if(m)return valid(m[1],m[2],m[3]);
     m=s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/);if(!m)return null;let[d,mo]=md?[m[2],m[1]]:[m[1],m[2]];let y=+m[3];if(y<100)y+=2000;
-    if(+mo<1||+mo>12||+d<1||+d>31)return null;return `${y}-${pad(mo)}-${pad(d)}`;};}
+    return valid(y,mo,d);};}
+function valid(y,m,d){y=+y;m=+m;d=+d;const x=new Date(Date.UTC(y,m-1,d));if(!(y>=1900&&y<=2999)||x.getUTCMonth()!==m-1||x.getUTCDate()!==d)return null;return `${y}-${pad(m)}-${pad(d)}`;}
 const COLS={date:['date','fecha','datum','data'],account:['account','cuenta','konto','conta'],category:['category','categoria','kategorie'],amount:['amount','importe','cantidad','monto','betrag','valor'],currency:['currency','moneda','divisa','wahrung','moeda'],note:['description','descripcion','nota','note','notes','notas','comentario']};
 const TR=/^(?:to|from|a|al|de|del|hacia|desde|para|transfer(?:encia)?\s+(?:to|from|a|de))\s*[:]?\s*['"‘’«“]?(.+?)['"’»”]?\s*$/i;
 const OUT=/^(?:to|a|al|hacia|para|transfer(?:encia)?\s+(?:to|a))\b/i;

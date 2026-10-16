@@ -2,7 +2,7 @@
 
 App web instalable (PWA), sin servidor: todos los datos se guardan **solo en tu móvil** (localStorage del navegador). Funciona sin conexión.
 
-## Funciones (v1.2)
+## Funciones (v1.6)
 - Estilo Monefy: cabecera verde menta, iconos de línea alrededor de un donut con porcentajes, ingresos/gastos en el centro y botón «Saldo».
 - Botones redondos **−** (gasto) y **+** (ingreso); toca un icono del donut para añadir un gasto directo en esa categoría.
 - Pantalla de entrada con calculadora (+ − * / =), fecha, cuenta, nota; «OK» guarda, papelera elimina, ⇄ cambia gasto/ingreso.
@@ -31,7 +31,7 @@ Los datos viven solo en el navegador del móvil: si borras los datos del navegad
 ## Desarrollo y pruebas
 ```
 python3 -m http.server 8000      # y abrir http://localhost:8000/
-cd tests && npm install && npx playwright install chromium && node e2e.js   # necesita servidor en :8123 bajo /gastos/
+cd tests && npm install && npx playwright install chromium && node e2e.js && node audit.js   # necesita servidor en :8123 bajo /gastos/
 ```
 Capa de datos en `js/store.js` (preparada para añadir sincronización con Google Drive en una versión futura).
 
