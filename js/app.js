@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.6.3';
+const APP_VERSION='1.6.4';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -14,7 +14,8 @@ function fmtNum(cents){cents=Math.round(+cents||0);const neg=cents<0;cents=Math.
 // Signo de un saldo tras redondear a céntimos: -0 y -0,001 céntimos son 0 (neutro).
 const sgn=c=>{const r=Math.round(+c||0);return r<0?'neg':r>0?'pos':'zero';};
 const money=c=>fmtNum(c)+'\u00a0'+D().settings.currency;
-function moneyH(c){const s=fmtNum(c),i=s.lastIndexOf(',');return `<span class="num">${s.slice(0,i)}<small class="c">${s.slice(i)}</small>\u00a0${esc(D().settings.currency)}</span>`;}
+// expense=true: total de gastos (importe positivo) con signo menos tipográfico «−»; 0 sin signo. Solo presentación.
+function moneyH(c,expense){let s=fmtNum(c);if(expense&&Math.round(+c||0)>0)s='\u2212'+s;const i=s.lastIndexOf(',');return `<span class="num">${s.slice(0,i)}<small class="c">${s.slice(i)}</small>\u00a0${esc(D().settings.currency)}</span>`;}
 const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const parseIso=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);};
 const fmtDate=s=>{const[y,m,d]=s.split('-');return d+'/'+m+'/'+y;};
@@ -112,7 +113,7 @@ function viewMain(){
   const icons=cats.map(c=>{const p=pos[c.id];const pc=sums[c.id]?Math.max(1,Math.round(sums[c.id]/exp*100))+'%':'';
     return `<button class="ci" style="left:${p.x}%;top:${p.y/118*100}%;color:${c.color}" data-act="quick" data-cat="${esc(c.id)}" title="${esc(c.name)}" aria-label="Gasto en ${esc(c.name)}">${I(c.icon,'',1.1)}${pc?`<span class="pc" style="color:${shade(c.color,.6)}">${pc}</span>`:''}</button>`;}).join('');
   return header()+dateLine()+`<div class="chart" id="chart"><svg viewBox="0 0 100 118"><g transform="translate(.9 1.3)">${shadow}</g>${segs}${lines}</svg>${icons}
-   <div class="center"><div class="inc" id="totInc">${moneyH(inc)}</div><div class="exp" id="totExp">${moneyH(-exp)}</div></div></div>
+   <div class="center"><div class="inc" id="totInc">${moneyH(inc)}</div><div class="exp" id="totExp">${moneyH(exp,true)}</div></div></div>
    <div class="saldorow"><button class="lb" data-act="list" aria-label="Lista">${U('lines','',1.4)}</button>${saldoBtn('list')}<button class="lb" data-act="list" aria-label="Lista">${U('lines','',1.4)}</button></div>`+bigButtons();
 }
 function viewList(){
@@ -129,7 +130,7 @@ function viewList(){
     const items=st.open[k]?g.items.slice().sort((a,b)=>b.date.localeCompare(a.date)||(b.updated||0)-(a.updated||0)).map(x=>{
       const n=x.type==='transfer'?acc(x.accountId).name+' → '+acc(x.toAccountId).name+(x.note?' · '+x.note:''):(x.note||(st.account==='all'?acc(x.accountId).name:''));
       return `<button class="tx" data-act="edit" data-id="${esc(x.id)}"><span class="dot" style="background:${c.color}"></span><span class="a">${moneyH(x.amount)}</span><span class="n">${esc(n)}</span><span class="d">${fmtDM(x.date)}</span></button>`;}).join(''):'';
-    return `<div class="group"><button class="grow" data-act="toggle" data-k="${esc(k)}">${U(st.open[k]?'chevU':'chevD','chev',1.6)}<span class="gi" style="color:${c.color}">${I(c.icon,'',1.1)}</span><span class="nm" style="color:${shade(c.color,.7)}">${esc(c.name)}</span><span class="badge">${g.items.length}</span><span class="amt ${cls}">${moneyH(g.sum)}</span></button>${items}</div>`;}).join('');
+    return `<div class="group"><button class="grow" data-act="toggle" data-k="${esc(k)}">${U(st.open[k]?'chevU':'chevD','chev',1.6)}<span class="gi" style="color:${c.color}">${I(c.icon,'',1.1)}</span><span class="nm" style="color:${shade(c.color,.7)}">${esc(c.name)}</span><span class="badge">${g.items.length}</span><span class="amt ${cls}">${moneyH(g.sum,g.type==='expense')}</span></button>${items}</div>`;}).join('');
   return header()+dateLine()+`<div class="saldorow"><button class="lb" data-act="main" aria-label="Gráfico">${U('lines','',1.4)}</button>${saldoBtn('main')}<button class="lb" data-act="sort" aria-label="Ordenar (${st.sort==='amount'?'por importe':'por nombre'})" title="Ordenar">${U('sort','',1.2)}</button></div>
    ${st.searching?`<div class="searchbar"><input id="q" type="search" placeholder="Buscar nota, categoría o importe" value="${esc(st.q)}"></div>`:''}
    <div class="list page">${html||'<div class="empty">No hay transacciones en este periodo</div>'}</div>`+bigButtons();
@@ -333,12 +334,12 @@ function showBackupBanner(){const why=backupDue();if(!why||$('#bkBanner'))return
 // ---------- importar de Monefy ----------
 function importMonefy(buf){let p;try{p=Monefy.parse(buf);}catch(e){toast('Error: '+e.message);return;}
   if(!p.tx.length){ask({title:'Importar de Monefy',msg:'No se encontraron movimientos en el archivo.',ok:'Entendido',okOnly:true});return;}
-  const s=p.summary,eur=c=>fmtNum(c)+'\u00a0'+esc(p.currencies.length===1&&p.currencies[0]!=='EUR'?p.currencies[0]:'€');
+  const s=p.summary,eur=(c,ex)=>(ex&&c>0?'\u2212':'')+fmtNum(c)+'\u00a0'+esc(p.currencies.length===1&&p.currencies[0]!=='EUR'?p.currencies[0]:'€');
   const li=(a,f)=>a.map(f).join('');
   const body=`<div class="mfprev" id="mfPrev">
    <p><b>${s.n}</b> movimientos · ${esc(fmtLong(s.from))} – ${esc(fmtLong(s.to))}${s.transfers?` · <b>${s.transfers}</b> transferencias`:''}${p.errors.length?`<br><span class="exp">${p.errors.length} filas ignoradas (líneas ${p.errors.slice(0,5).join(', ')}${p.errors.length>5?'…':''})</span>`:''}</p>
    <h3>Cuentas (${p.accounts.length})</h3><ul>${li(s.perAccount,a=>`<li>${esc(a.name)} <span>${a.n} · <span class="bal ${sgn(a.balance)}">${eur(a.balance)}</span></span></li>`)}</ul>
-   <h3>Gastos (${s.expense.length} categorías)</h3><ul>${li(s.expense,e=>`<li>${esc(e.name)} <span>${e.n} · <span class="exp">${eur(e.total)}</span></span></li>`)}</ul>
+   <h3>Gastos (${s.expense.length} categorías)</h3><ul>${li(s.expense,e=>`<li>${esc(e.name)} <span>${e.n} · <span class="exp">${eur(e.total,true)}</span></span></li>`)}</ul>
    <h3>Ingresos</h3><ul>${li(s.income,e=>`<li>${esc(e.name)} <span>${e.n} · <span class="inc">${eur(e.total)}</span></span></li>`)}</ul>
    <label class="mfmode"><input type="radio" name="mfMode" value="replace" checked> Reemplazar mis datos</label>
    <label class="mfmode"><input type="radio" name="mfMode" value="merge"> Añadir a mis datos (sin duplicados)</label></div>`;

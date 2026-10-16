@@ -2,7 +2,7 @@
 
 App web instalable (PWA), sin servidor: todos los datos se guardan **solo en tu móvil** (localStorage del navegador). Funciona sin conexión.
 
-## Funciones (v1.6.3)
+## Funciones (v1.6.4)
 - Estilo Monefy: cabecera verde menta, iconos de línea alrededor de un donut con porcentajes, ingresos/gastos en el centro y botón «Saldo».
 - Botones redondos **−** (gasto) y **+** (ingreso); toca un icono del donut para añadir un gasto directo en esa categoría.
 - Pantalla de entrada con calculadora (+ − * / =), fecha, cuenta, nota; «OK» guarda, papelera elimina, ⇄ cambia gasto/ingreso.

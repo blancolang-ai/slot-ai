@@ -16,7 +16,7 @@ function dataset(){const na=ri(1,4);const accounts=Array.from({length:na},(_,i)=
     if(type==='transfer'){t.toAccountId=pick(accounts.filter(x=>x.id!==a)).id;}else t.categoryId=pick(categories.filter(c=>c.type===type)).id;
     transactions.push(t);}
   return {app:'slot-ai',version:4,settings:{currency:'€',weekStart:pick([0,1]),dark:false},accounts,categories,transactions};}
-const cents=s=>{s=s.replace(/[^\d,\-]/g,'');return Math.round(+s.replace(',','.')*100);}; // solo para leer el texto ya formateado
+const cents=s=>{s=s.replace(/\u2212/g,'-').replace(/[^\d,\-]/g,'');return Math.round(+s.replace(',','.')*100);}; // solo para leer el texto ya formateado
 (async()=>{
  // ---------- unidad: importes CSV ----------
  const AM={'1.234,56':123456,'1,234.56':123456,'-27.2':-2720,'27,2':2720,'−14 €':-1400,'1.234':123400,'0,5':50,'-0,01':-1,'1.234.567,89':123456789,'(14,00)':-1400,'19.99':1999,'0.1':10,'abc':NaN};

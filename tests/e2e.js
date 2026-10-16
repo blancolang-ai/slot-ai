@@ -86,7 +86,7 @@ process.on('exit',()=>console.log(results.join('\n')));
  await p.click('[data-eact="pick"]:has-text("Comida")');
  ok('gasto añadido',(await txt('#totExp')).includes('12,50'));
  await p.click('.ci[title="Ocio"]');await key('1234');await p.click('#eSave');
- ok('formato -1.246,50 €',(await txt('#totExp')).replace(/\s/g,' ').includes('-1.246,50'));
+ ok('formato −1.246,50 € (1.6.4: signo menos tipográfico)',(await txt('#totExp')).replace(/\s/g,' ').includes('\u22121.246,50'));
  await p.click('.circ.p');ok('título "Nuevo ingreso"',(await txt('#entry h1'))==='Nuevo ingreso');
  await key('2000');await p.click('#eChoose');await p.click('[data-eact="pick"]:has-text("Salario")');
  ok('ingreso',(await txt('#totInc')).includes('2.000,00'));
