@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.4.5';
+const APP_VERSION='1.5.0';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -149,8 +149,8 @@ function viewSettings(){const s=D().settings;
 function viewCategories(){const t=st.catTab;
   return subHeader('Categorías')+`<div class="tabs"><button class="${t==='expense'?'on':''}" data-act="catTab" data-t="expense">Gastos</button><button class="${t==='income'?'on':''}" data-act="catTab" data-t="income">Ingresos</button></div>
   <div class="page list">${D().categories.filter(c=>c.type===t).map(c=>`<button class="grow" data-act="editCat" data-id="${c.id}"><span class="gi" style="color:${c.color}">${I(c.icon,'',1.1)}</span><span class="nm" style="color:${shade(c.color,.7)}">${esc(c.name)}</span><span class="amt trc">${U('pencil','',1.3).replace('<svg','<svg style="width:20px;height:20px"')}</span></button>`).join('')}
-  ${t==='expense'?'<div class="empty" style="padding:16px">Toca una categoría para cambiarle el nombre, icono o color.</div>':''}</div>
-  ${t==='income'?`<button class="fab" data-act="editCat" aria-label="Nueva categoría">${svgIcon(UI.plus,'',3)}</button>`:''}`;}
+  <div class="empty" style="padding:16px">Toca una categoría para cambiarle el nombre, icono o color.</div></div>
+  <button class="fab" data-act="editCat" aria-label="Nueva categoría">${svgIcon(UI.plus,'',3)}</button>`;}
 function leftDrawer(){
   const a=st.account==='all'?{name:'Todas las cuentas',icon:'banknotes'}:acc(st.account);
   const opts=[['day','Día'],['week','Semana'],['month','Mes'],['year','Año'],['all','Todo'],['range','Intervalo']];
@@ -307,13 +307,12 @@ function showBackupBanner(){const why=backupDue();if(!why||$('#bkBanner'))return
 // ---------- importar de Monefy ----------
 function importMonefy(buf){let p;try{p=Monefy.parse(buf);}catch(e){toast('Error: '+e.message);return;}
   if(!p.tx.length){ask({title:'Importar de Monefy',msg:'No se encontraron movimientos en el archivo.',ok:'Entendido',okOnly:true});return;}
-  const s=p.summary,m=Monefy.mapExpense(s.expense.map(e=>e.name)),eur=c=>fmtNum(c)+'\u00a0'+esc(p.currencies.length===1&&p.currencies[0]!=='EUR'?p.currencies[0]:'€');
+  const s=p.summary,eur=c=>fmtNum(c)+'\u00a0'+esc(p.currencies.length===1&&p.currencies[0]!=='EUR'?p.currencies[0]:'€');
   const li=(a,f)=>a.map(f).join('');
   const body=`<div class="mfprev" id="mfPrev">
    <p><b>${s.n}</b> movimientos · ${esc(fmtLong(s.from))} – ${esc(fmtLong(s.to))}${s.transfers?` · <b>${s.transfers}</b> transferencias`:''}${p.errors.length?`<br><span class="exp">${p.errors.length} filas ignoradas (líneas ${p.errors.slice(0,5).join(', ')}${p.errors.length>5?'…':''})</span>`:''}</p>
    <h3>Cuentas (${p.accounts.length})</h3><ul>${li(s.perAccount,a=>`<li>${esc(a.name)} <span>${a.n} · ${eur(a.balance)}</span></li>`)}</ul>
-   <h3>Gastos (${s.expense.length} categorías)</h3><ul>${li(s.expense,e=>`<li>${esc(e.name)}${m.merged.includes(e.name)?' → <i>Otros</i>':''} <span>${e.n} · <span class="exp">${eur(e.total)}</span></span></li>`)}</ul>
-   ${m.merged.length?`<p class="exp">Slot-AI tiene 6 categorías de gasto: al reemplazar, ${m.merged.length} se agruparán en «Otros».</p>`:''}
+   <h3>Gastos (${s.expense.length} categorías)</h3><ul>${li(s.expense,e=>`<li>${esc(e.name)} <span>${e.n} · <span class="exp">${eur(e.total)}</span></span></li>`)}</ul>
    <h3>Ingresos</h3><ul>${li(s.income,e=>`<li>${esc(e.name)} <span>${e.n} · <span class="inc">${eur(e.total)}</span></span></li>`)}</ul>
    <label class="mfmode"><input type="radio" name="mfMode" value="replace" checked> Reemplazar mis datos</label>
    <label class="mfmode"><input type="radio" name="mfMode" value="merge"> Añadir a mis datos (sin duplicados)</label></div>`;
@@ -324,8 +323,8 @@ function importMonefy(buf){let p;try{p=Monefy.parse(buf);}catch(e){toast('Error:
 // ---------- formularios: categoría y cuenta ----------
 function openForm(kind,id){
   const isAcc=kind==='acc';const coll=isAcc?'accounts':'categories';
-  const obj=id?{...D()[coll].find(x=>x.id===id)}:(isAcc?{name:'',icon:'moneybag',initial:0}:{name:'',icon:'moneybag',color:'#4caf7a',type:'income'});
-  const canDel=id&&(isAcc||obj.type==='income');
+  const obj=id?{...D()[coll].find(x=>x.id===id)}:(isAcc?{name:'',icon:'moneybag',initial:0}:(st.catTab==='expense'?{name:'',icon:'tag',color:'#e57373',type:'expense'}:{name:'',icon:'moneybag',color:'#4caf7a',type:'income'}));
+  const canDel=!!id;
   const keys=isAcc?ACC_ICONS:Object.keys(ICONS).filter(k=>k!=='transfer');
   const o=document.createElement('div');o.id='form';o.className='overlay';
   const draw=()=>{o.innerHTML=`<div class="top"><button class="ib" data-f="close" aria-label="Cerrar">${U('close','',1.6)}</button><h1>${id?'Editar':'Nueva'} ${isAcc?'cuenta':'categoría'}</h1></div><div class="form">

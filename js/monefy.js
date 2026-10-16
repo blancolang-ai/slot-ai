@@ -64,7 +64,7 @@ function parse(input){
       perAccount:accNames.map(a=>{const ts=tx.filter(t=>t.account===a||t.from===a||t.to===a);let bal=0;for(const t of ts){if(t.type==='income')bal+=t.amount;else if(t.type==='expense')bal-=t.amount;else bal+=t.to===a?t.amount:-t.amount;}return{name:a,n:ts.length,balance:bal};})}};}
 // Asigna las categorías de gasto del CSV a las 6 casillas fijas de Slot-AI.
 const SLOTS=[['exp-comida',/comida|super|aliment|mercad|restaur|cafe/,'food'],['exp-casa',/casa|hogar|alquiler|hipoteca|vivienda/,'house'],['exp-transporte',/auto|coche|transp|gasolin|taxi|bus|tren|vehic/,'car'],['exp-ocio',/ocio|regalo|cine|viaje|entreten|deporte/,'gift'],['exp-salud',/salud|farmac|medic|doctor|higiene/,'heart'],['exp-otros',/otros|varios|general/,'tag']];
-const KWICON=[[/auto|coche/,'car'],[/comunic|telefon|\bmovil|internet/,'phone'],[/regalo/,'gift'],[/auto|coche/,'car'],[/factur|recibo/,'tag'],[/ropa/,'shirt'],[/comida|super/,'cart'],[/casa|hogar/,'house'],[/salud|farmac/,'heart']];
+const KWICON=[[/auto|coche|transp|gasolin|taxi/,'car'],[/ocio|cine|viaje/,'cocktail'],[/comunic|telefon|\bmovil|internet/,'phone'],[/regalo/,'gift'],[/auto|coche/,'car'],[/factur|recibo/,'tag'],[/ropa/,'shirt'],[/comida|super/,'cart'],[/casa|hogar/,'house'],[/salud|farmac/,'heart']];
 function mapExpense(names){// names ordenados por total desc. Devuelve {nombre: slotId}, y merged:[nombres a Otros]
   const map={},free=SLOTS.map(s=>s[0]),keep=names.length>6?names.slice(0,5):names.slice();
   for(const n of keep){const s=SLOTS.find(([id,re])=>free.includes(id)&&re.test(norm(n)));if(s){map[n]=s[0];free.splice(free.indexOf(s[0]),1);}}
@@ -75,22 +75,25 @@ function iconFor(name,fallback){const n=norm(name);const k=KWICON.find(([re])=>r
 // Construye datos Slot-AI v3. mode: 'replace' | 'merge'. base: datos actuales (para fusionar o conservar ajustes).
 function build(p,base,mode,uid){uid=uid||(()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8));
   const d=JSON.parse(JSON.stringify(base));const merge=mode==='merge';
-  if(!merge){d.accounts=[];d.transactions=[];d.categories=d.categories.filter(c=>c.type==='expense');}
+  // Reemplazar: las categorías pasan a ser exactamente las del CSV (sin predeterminadas). Fusionar: por nombre, creando las que falten.
+  if(!merge){d.accounts=[];d.transactions=[];d.categories=[];}
   if(p.currencies.length===1){const c=p.currencies[0].toUpperCase();d.settings.currency={EUR:'€',USD:'$',GBP:'£'}[c]||c;}
   const accId={};for(const name of p.accounts){let a=d.accounts.find(x=>norm(x.name)===norm(name));if(!a){a={id:uid(),name,icon:/tarjeta|card|banco|bank/i.test(name)?'card':'moneybag',initial:0};d.accounts.push(a);}accId[name]=a.id;}
-  const expNames=p.summary.expense.map(e=>e.name);let catId={};
-  if(merge){for(const n of expNames){const c=d.categories.find(x=>x.type==='expense'&&norm(x.name)===norm(n));catId[n]=c?c.id:'exp-otros';}}
-  else{const m=mapExpense(expNames);catId=m.map;
-    for(const n of expNames){const c=d.categories.find(x=>x.id===m.map[n]);if(!c||m.merged.includes(n))continue;c.name=n;c.icon=iconFor(n,(SLOTS.find(s=>s[0]===c.id)||[])[2]||c.icon);}
-    if(m.mergedSlot){const c=d.categories.find(x=>x.id===m.mergedSlot);c.name='Otros';c.icon='tag';}}
-  const incId={};for(const e of p.summary.income){let c=d.categories.find(x=>x.type==='income'&&norm(x.name)===norm(e.name));
-    if(!c){const ic={salario:'briefcase',nomina:'briefcase',ahorros:'piggy',depositos:'moneybag',ventas:'store'}[norm(e.name)]||'moneybag';c={id:uid(),type:'income',name:e.name,icon:ic,color:['#43a86a','#26a69a','#4caf7a','#7cb342','#00897b'][d.categories.filter(x=>x.type==='income').length%5]};d.categories.push(c);}incId[e.name]=c.id;}
+  const EXPCOL=['#e573a0','#5aa5dc','#e57373','#f0a040','#d9534f','#cfa80a','#7986cb','#4db6ac','#a1887f','#9575cd'],INCCOL=['#43a86a','#26a69a','#4caf7a','#7cb342','#00897b'];
+  const ensure=(type,name)=>{let c=d.categories.find(x=>x.type===type&&norm(x.name)===norm(name));
+    if(!c){const k=d.categories.filter(x=>x.type===type).length;
+      c=type==='expense'?{id:uid(),type,name,icon:iconFor(name,'tag'),color:EXPCOL[k%EXPCOL.length]}
+        :{id:uid(),type,name,icon:{salario:'briefcase',nomina:'briefcase',ahorros:'piggy',depositos:'moneybag',ventas:'store'}[norm(name)]||'moneybag',color:INCCOL[k%INCCOL.length]};
+      d.categories.push(c);}return c.id;};
+  const catId={},incId={};
+  for(const e of p.summary.expense)catId[e.name]=ensure('expense',e.name);
+  for(const e of p.summary.income)incId[e.name]=ensure('income',e.name);
   const key=t=>[t.type,t.date,t.amount,t.accountId,t.toAccountId||'',t.categoryId||'',norm(t.note)].join('|');
   const seen=new Set(d.transactions.map(key));let added=0,dup=0;
   for(const t of p.tx){const x={id:uid(),type:t.type,amount:t.amount,date:t.date,note:t.note,updated:Date.now()};
     if(t.type==='transfer'){x.accountId=accId[t.from];x.toAccountId=accId[t.to];}else{x.accountId=accId[t.account];x.categoryId=t.type==='expense'?catId[t.category]:incId[t.category];}
     const k=key(x);if(merge&&seen.has(k)){dup++;continue;}seen.add(k);d.transactions.push(x);added++;}
-  d.version=3;d.updated=Date.now();return{data:d,added,dup};}
+  d.version=4;d.updated=Date.now();return{data:d,added,dup};}
 const api={decode,parse,parseAmount,build,mapExpense};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.Monefy=api;
 })(typeof window!=='undefined'?window:this);

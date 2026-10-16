@@ -1,10 +1,10 @@
 // Capa de datos. Todo pasa por Store; para añadir sync (p. ej. Google Drive) basta con
 // implementar otro "backend" con load()/save() y usar exportData()/importData().
 // Esquema v3: cuentas (negocios/locales) con saldo inicial, transferencias entre cuentas,
-// exactamente 6 categorías de gasto (renombrables) + categorías de ingreso. Iconos = claves de js/icons.js.
+// Esquema v4: las categorías son exactamente las de los datos del usuario (las predeterminadas solo siembran una instalación nueva). Iconos = claves de js/icons.js.
 (function(){
 const KEY='gastos.v1'; // clave de almacenamiento (se mantiene para conservar los datos existentes)
-const SCHEMA=3;
+const SCHEMA=4;
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 const EXP=[['exp-comida','Comida','cart','#e573a0'],['exp-casa','Casa','house','#5aa5dc'],['exp-transporte','Transporte','bus','#e57373'],['exp-ocio','Ocio','cocktail','#f0a040'],['exp-salud','Salud','thermo','#d9534f'],['exp-otros','Otros','tag','#cfa80a']];
 const OTROS='exp-otros';
@@ -39,18 +39,19 @@ function migrate(d){
     if(t.type==='transfer'&&(!accIds.includes(t.toAccountId)||t.toAccountId===t.accountId))return null;
     if(t.type!=='transfer')delete t.toAccountId;
     return t;}).filter(Boolean);
-  // Categorías de gasto: exactamente las 6 fijas
-  const oldExp=d.categories.filter(c=>c.type==='expense');const map={};
-  const newExp=defExp().map(def=>{
-    const old=oldExp.find(c=>c.id===def.id)||oldExp.find(c=>norm(c.name)===norm(def.name));
-    if(!old)return def;map[old.id]=def.id;
-    const color=(!old.color||old.color===V2COL[def.id]||v<2)?def.color:old.color;
-    return {...def,name:old.name||def.name,icon:isKey(old.icon)?old.icon:def.icon,color};});
-  oldExp.forEach(c=>{if(!map[c.id])map[c.id]=OTROS;});
-  const ids=newExp.map(c=>c.id);
-  d.transactions.forEach(t=>{if(t.type==='expense'){t.categoryId=map[t.categoryId]||(ids.includes(t.categoryId)?t.categoryId:OTROS);}});
-  const inc=d.categories.filter(c=>c.type==='income').map(c=>({...c,icon:isKey(c.icon)?c.icon:(INCICON[norm(c.name)]||'moneybag')}));
-  d.categories=[...newExp,...inc];
+  // Categorías: se conservan tal cual (sin añadir ni fusionar predeterminadas); solo se corrigen iconos/colores antiguos.
+  const DEF=Object.fromEntries(EXP.map(([id,n,i,c])=>[id,{n,i,c}]));
+  d.categories=d.categories.filter(c=>c&&c.id&&(c.type==='expense'||c.type==='income')).map(c=>{
+    const df=c.type==='expense'&&DEF[c.id];
+    const icon=isKey(c.icon)?c.icon:c.type==='income'?(INCICON[norm(c.name)]||'moneybag'):(df?df.i:'tag');
+    const color=df&&(!c.color||c.color===V2COL[c.id]||v<2)?df.c:(c.color||'#9e9e9e');
+    return {...c,name:c.name||(df?df.n:'Categoría'),icon,color};});
+  // v3→v4: hasta v1.4.5 se forzaban las 6 categorías de gasto predeterminadas. Si los datos mezclan categorías
+  // propias (importadas) con predeterminadas sin tocar, se quitan las predeterminadas que no tienen movimientos.
+  if(v<4){const used=new Set(d.transactions.map(t=>t.categoryId));
+    const untouched=c=>c.type==='expense'&&DEF[c.id]&&norm(c.name)===norm(DEF[c.id].n);
+    const exp=d.categories.filter(c=>c.type==='expense');
+    if(d.transactions.length&&(d.imported||exp.some(c=>!DEF[c.id])))d.categories=d.categories.filter(c=>!untouched(c)||used.has(c.id));}
   d.version=SCHEMA;
   return d;
 }
@@ -60,12 +61,12 @@ try{const raw=backend.load();data=raw?migrate(raw):defaults();if(raw)backend.sav
 function save(){data.updated=Date.now();backend.save(data);}
 window.Store={uid,migrate,get data(){return data},save,
   upsert(coll,obj){const a=data[coll];obj.updated=Date.now();if(!obj.id)obj.id=uid();const i=a.findIndex(x=>x.id===obj.id);i>=0?a[i]=obj:a.push(obj);save();return obj;},
-  remove(coll,id){if(coll==='categories'&&EXP.some(([e])=>e===id))return;data[coll]=data[coll].filter(x=>x.id!==id);save();},
+  remove(coll,id){data[coll]=data[coll].filter(x=>x.id!==id);save();},
   moveAccount(from,to){let n=0;for(const t of data.transactions){let ch=false;if(t.accountId===from){t.accountId=to;ch=true;}if(t.toAccountId===from){t.toAccountId=to;ch=true;}if(ch){n++;t.updated=Date.now();}}
     data.transactions=data.transactions.filter(t=>!(t.type==='transfer'&&t.accountId===t.toAccountId));save();return n;},
   setSetting(k,v){data.settings[k]=v;save();},
   exportData(){return JSON.stringify({app:'slot-ai',...data},null,1);},
-  importData(json){data=migrate(JSON.parse(json));save();},
+  importData(json){const d=JSON.parse(json);delete d.app;data=migrate(d);save();},
   reset(){data=defaults();save();},
   setBackend(b){backend=b;}};
 })();
