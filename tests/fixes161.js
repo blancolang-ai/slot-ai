@@ -130,7 +130,7 @@ const QUOTA=keys=>`(()=>{const o=Storage.prototype.setItem;Storage.prototype.set
  ok('pestañas: edición de movimiento eliminado se cierra',!(await A.$('#entry')));
  ok('pestañas: el movimiento sigue eliminado',!(await A.evaluate(id=>Store.data.transactions.some(t=>t.id===id),tid)));
  await A.click('[data-act="right"]');await A.click('.arow >> nth=0');await A.click('#fDel');await A.waitForSelector('#dlg');
- await B.evaluate(()=>Store.upsert('accounts',{id:'Z',name:'Nueva',icon:'card',initial:0}));await A.waitForTimeout(200);ok('pestañas: un diálogo abierto se cierra al cambiar los datos',!(await A.$('#dlg')));
+ await B.evaluate(()=>Store.upsert('accounts',{id:'Z',name:'Nueva',icon:'card',initial:0}));await A.waitForTimeout(200);ok('pestañas (1.6.2): un cambio ajeno no cierra el diálogo abierto',!!(await A.$('#dlg')));
  ok('sin errores de página',!errs.filter(e=>!/No se pudo guardar|Access is denied/.test(e)).length,errs);
  await b.close();
 })().catch(e=>{ok('excepción',false,String(e&&e.stack||e));process.exit(1);});

@@ -100,7 +100,7 @@ function build(p,base,mode,uid){uid=uid||(()=>Date.now().toString(36)+Math.rando
   const d=JSON.parse(JSON.stringify(base));const merge=mode==='merge';
   // Reemplazar: las categorías pasan a ser exactamente las del CSV (sin predeterminadas). Fusionar: por nombre, creando las que falten.
   if(!merge){d.accounts=[];d.transactions=[];d.categories=[];}
-  if(p.currencies.length===1){const c=p.currencies[0].toUpperCase();d.settings.currency={EUR:'€',USD:'$',GBP:'£'}[c]||c;}
+  if(p.currencies.length===1){const c=p.currencies[0].toUpperCase();const v={EUR:'€',USD:'$',GBP:'£'}[c]||c;if(v.trim()&&v.length<=4)d.settings.currency=v;}
   const accId={};for(const name of p.accounts){let a=d.accounts.find(x=>norm(x.name)===norm(name));if(!a){a={id:uid(),name,icon:/tarjeta|card|banco|bank/i.test(name)?'card':'moneybag',initial:0};d.accounts.push(a);}accId[name]=a.id;}
   const EXPCOL=['#e573a0','#5aa5dc','#e57373','#f0a040','#d9534f','#cfa80a','#7986cb','#4db6ac','#a1887f','#9575cd'],INCCOL=['#43a86a','#26a69a','#4caf7a','#7cb342','#00897b'];
   const ensure=(type,name)=>{let c=d.categories.find(x=>x.type===type&&norm(x.name)===norm(name));

@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.6.1';
+const APP_VERSION='1.6.2';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -115,7 +115,7 @@ function viewMain(){
 }
 function viewList(){
   let list=txInPeriod();
-  if(st.searching&&st.q.trim()){const q=st.q.trim().toLowerCase();list=list.filter(x=>(x.note||'').toLowerCase().includes(q)||(x.type!=='transfer'&&cat(x.categoryId).name.toLowerCase().includes(q))||fmtNum(x.amount).includes(q));}
+  if(st.searching&&st.q.trim()){const q=st.q.trim().toLowerCase();list=list.filter(x=>(x.note||'').toLowerCase().includes(q)||(x.type!=='transfer'&&cat(x.categoryId).name.toLowerCase().includes(q))||fmtNum(x.amount).includes(q)||(/\d/.test(q)&&fmtNum(x.amount).replace(/\./g,'').includes(q.replace(/\./g,''))));}
   const groups={};
   for(const x of list){const k=x.type==='transfer'?'__tr':x.categoryId;if(x.type!=='transfer'&&st.account!=='all'&&x.accountId!==st.account)continue;
     const g=(groups[k]=groups[k]||{type:x.type,items:[],sum:0});g.items.push(x);
@@ -205,7 +205,8 @@ function goBack(){if(history.state&&history.state.sub)history.back();else{histor
 function openEntry(type,tx,presetCat){
   const defAcc=st.account!=='all'?st.account:(D().accounts[0]||{}).id;
   tx=tx?{...tx}:{type,amount:0,date:today(),accountId:defAcc,note:'',categoryId:presetCat||null,...(type==='transfer'?{toAccountId:(D().accounts.find(a=>a.id!==defAcc)||{}).id}:{})};
-  ed={tx,expr:exprFromCents(tx.amount),editing:!!tx.id,picking:false};
+  if(type==='transfer')delete tx.categoryId;
+  ed={tx,expr:exprFromCents(tx.amount),editing:!!tx.id,picking:false,dateTouched:false};
   pushLayer({entry:1});renderEntry();
 }
 function closeEntry(){if(!ed)return;ed=null;renderEntry();if(history.state&&history.state.entry)history.back();}
@@ -245,7 +246,7 @@ function saveEntry(){readEntryFields();const x=ed.tx;x.amount=evalExpr(ed.expr);
   if(!Store.okDate(x.date)){toast('Fecha no válida');return;}
   if(x.type==='transfer'&&x.accountId===x.toAccountId){toast('Elige dos cuentas distintas');return;}
   if(x.type!=='transfer'&&!x.categoryId){ed.picking=true;renderEntry();return;}
-  if(x.type!=='transfer')delete x.toAccountId;
+  if(x.type!=='transfer')delete x.toAccountId;else delete x.categoryId;
   Store.upsert('transactions',x,ed.editing);closeEntry();render();toast('Guardado');}
 function onKey(k){let e=ed.expr;const op={'+':'+','-':'-','*':'×','/':'÷'}[k];
   if(k==='⌫')e=e.slice(0,-1);
@@ -303,7 +304,9 @@ function backupCard(){const lb=lastBackup();const days=lb?Math.floor((Date.now()
    <button class="btn bkbig" data-act="exportJson" id="btnExport">${U('transfer','',1)}Exportar copia</button>
    <p class="bklast" id="lastBackup">Última copia: <b>${esc(when)}</b></p>
    ${warn?`<p class="bkwarn" id="backupWarn">${lb?`Hace ${days} días de tu última copia.`:'Aún no has hecho ninguna copia.'} Te recomendamos exportar una ahora.</p>`:''}</div>`;}
-async function exportBackup(){const name='slot-ai-copia-'+stamp()+'.json',json=Store.exportData();
+async function exportBackup(){const prob=Store.exportProblem();
+  if(prob){const d=await ask({title:'Esta copia no se podría restaurar',msg:prob+'. Puedes exportarla igualmente para conservar los datos, pero la app la rechazará al restaurarla.',ok:'Exportar igualmente'});if(!d)return;}
+  const name='slot-ai-copia-'+stamp()+'.json',json=Store.exportData();
   const mark=()=>{try{localStorage.setItem(LB,new Date().toISOString());localStorage.setItem(LB+'Count',String(D().transactions.length));}catch(e){}hideBackupBanner();if(route()==='/ajustes')render();};
   let file=null;try{file=new File([json],name,{type:'application/json'});}catch(e){}
   if(file&&navigator.canShare&&navigator.share&&navigator.canShare({files:[file]})){
@@ -338,8 +341,9 @@ function importMonefy(buf){let p;try{p=Monefy.parse(buf);}catch(e){toast('Error:
    <label class="mfmode"><input type="radio" name="mfMode" value="replace" checked> Reemplazar mis datos</label>
    <label class="mfmode"><input type="radio" name="mfMode" value="merge"> Añadir a mis datos (sin duplicados)</label></div>`;
   ask({title:'Importar de Monefy',msg:'Revisa el resumen antes de importar.',ok:'Importar',body}).then(d=>{if(!d)return;
-    const mode=d.querySelector('input[name=mfMode]:checked').value;const r=Monefy.build(p,Store.data,mode,Store.uid);
-    if(Store.corrupt&&!corruptSafe())return;const u=Store.importData(JSON.stringify(r.data));st.account='all';st.ptype='all';render();(u?undoToast:toast)(r.added+' movimientos importados'+(r.dup?` · ${r.dup} duplicados omitidos`:''));});}
+    const mode=d.querySelector('input[name=mfMode]:checked').value;let r;try{r=Monefy.build(p,Store.data,mode,Store.uid);}catch(e){ask({title:'No se pudo importar',msg:e.message+' No se ha cambiado nada.',ok:'Entendido',okOnly:true});return;}
+    if(Store.corrupt&&!corruptSafe())return;let u;try{u=Store.importData(JSON.stringify(r.data),!!Store.corrupt);}catch(e){if(!saveError(e.message))ask({title:'No se pudo importar',msg:e.message+' No se ha cambiado nada.',ok:'Entendido',okOnly:true});return;}
+    st.account='all';st.ptype='all';render();(u?undoToast:toast)(r.added+' movimientos importados'+(r.dup?` · ${r.dup} duplicados omitidos`:''));});}
 
 // ---------- formularios: categoría y cuenta ----------
 function openForm(kind,id){
@@ -373,15 +377,15 @@ function openForm(kind,id){
 
 // ---------- datos dañados al arrancar ----------
 // Los datos originales nunca se borran: siguen en gastos.v1 (y en una copia gastos.v1.corrupt-*) hasta que el usuario decida.
-function corruptKeys(){try{return Object.keys(localStorage).filter(k=>k.startsWith('gastos.v1.corrupt-')).sort();}catch(e){return[];}}
+function corruptKeys(){try{return Object.keys(localStorage).filter(k=>k.startsWith('gastos.v1.corrupt-')||k.startsWith('gastos.v1.prerepair-')).sort();}catch(e){return[];}}
 function corruptDialog(){const c=Store.corrupt;if(!c)return;
   const body=`<div class="dlgbtns" style="flex-direction:column;align-items:stretch"><button class="btn" id="cDown">Descargar datos dañados</button><button class="btn" id="cRestore">Restaurar una copia</button><button class="btn flat" id="cFresh">Empezar de cero</button></div>`;
   ask({title:'No se pudieron leer tus datos',msg:'Tus datos guardados están dañados y NO se han borrado'+(c.copyKey?' (hay además una copia interna)':'')+'. Descárgalos para recuperarlos o restaura una copia de seguridad. Mientras tanto no se guardará ningún cambio.',ok:'Más tarde',okOnly:true,body});
-  const d=$('#dlg');d.querySelector('#cDown').onclick=()=>{try{download('slot-ai-datos-danados-'+stamp()+'.json',c.raw||'','application/json');c.downloaded=true;toast('Datos dañados descargados');}catch(e){toast('No se pudo descargar');}};
+  const d=$('#dlg');d._corrupt=true;d.querySelector('#cDown').onclick=()=>{try{download('slot-ai-datos-danados-'+stamp()+'.json',c.raw||'','application/json');c.downloaded=true;toast('Datos dañados descargados');}catch(e){toast('No se pudo descargar');}};
   d.querySelector('#cRestore').onclick=()=>{d._close(null);location.hash='#/ajustes';setTimeout(()=>{const f=$('#fileImport');if(f)f.click();},50);};
-  d.querySelector('#cFresh').onclick=()=>{d._close(null);if(!corruptSafe())return;Store.reset();Store.clearPrev();render();toast('Datos nuevos; los dañados siguen guardados en la copia interna');};}
+  d.querySelector('#cFresh').onclick=()=>{d._close(null);if(!corruptSafe())return;Store.reset(true);Store.clearPrev();render();toast('Datos nuevos; los dañados siguen guardados en la copia interna');};}
 // Solo se sustituyen los datos dañados si hay copia interna o el usuario ya los descargó.
-function corruptSafe(){const c=Store.corrupt;if(!c)return true;if(c.copyKey||c.downloaded){Store.resolveCorrupt();return true;}
+function corruptSafe(){const c=Store.corrupt;if(!c)return true;if(c.copyKey||c.downloaded)return true;
   ask({title:'Descarga primero tus datos',msg:'No hay espacio para guardar una copia interna de tus datos dañados. Pulsa «Descargar datos dañados» antes de sustituirlos.',ok:'Entendido',okOnly:true}).then(corruptDialog);return false;}
 
 // ---------- export / import ----------
@@ -435,14 +439,14 @@ document.addEventListener('click',ev=>{
 });
 document.addEventListener('input',ev=>{if(ev.target.id==='q'){st.q=ev.target.value;st.focusQ=true;render();}});
 document.addEventListener('change',ev=>{const t=ev.target;
-  if(ed&&t.closest('#entry')){readEntryFields();if(t.id!=='eNote')renderEntry();return;}
+  if(ed&&t.closest('#entry')){if(t.id==='eDate')ed.dateTouched=true;readEntryFields();if(t.id!=='eNote')renderEntry();return;}
   if(t.id==='rfrom'||t.id==='rto'){/* se aplica al pulsar Aplicar */}
   else if(t.id==='pickDate'&&t.value&&Store.okDate(t.value)){st.ptype='day';st.anchor=parseIso(t.value);closeDrawers();render();}
   else if(t.id==='setCur'){Store.setSetting('currency',t.value.trim()||'€');render();}
   else if(t.id==='setWeek'){Store.setSetting('weekStart',+t.value);render();}
   else if(t.id==='setDark'){Store.setSetting('dark',t.checked);render();}
   else if(t.id==='fileMonefy'&&t.files[0]){const f=t.files[0];t.value='';f.arrayBuffer().then(importMonefy).catch(e=>toast('Error: '+e.message));}
-  else if(t.id==='fileImport'&&t.files[0]){const r=new FileReader();r.onload=()=>{const txt=r.result;t.value='';ask({title:'Restaurar copia',msg:'Esto sustituirá todos los datos actuales. ¿Continuar?',ok:'Restaurar'}).then(d=>{if(!d)return;try{if(Store.corrupt&&!corruptSafe())return;const u=Store.importData(txt);st.account='all';st.ptype='all';render();u?undoToast('Copia restaurada'):toast('Copia restaurada');}catch(e){ask({title:'No se pudo restaurar',msg:e.message+' No se ha cambiado nada.',ok:'Entendido',okOnly:true});}});};r.readAsText(t.files[0]);}
+  else if(t.id==='fileImport'&&t.files[0]){const r=new FileReader();r.onload=()=>{const txt=r.result;t.value='';ask({title:'Restaurar copia',msg:'Esto sustituirá todos los datos actuales. ¿Continuar?',ok:'Restaurar'}).then(d=>{if(!d)return;try{if(Store.corrupt&&!corruptSafe())return;const u=Store.importData(txt,!!Store.corrupt);st.account='all';st.ptype='all';render();u?undoToast('Copia restaurada'):toast('Copia restaurada');}catch(e){ask({title:'No se pudo restaurar',msg:e.message+' No se ha cambiado nada.',ok:'Entendido',okOnly:true});}});};r.readAsText(t.files[0]);}
 });
 function fitCenter(){const c=$('#chart .center');if(!c)return;c.style.fontSize='';let f=parseFloat(getComputedStyle(c).fontSize);
   while(f>11&&[...c.querySelectorAll('.num')].some(d=>d.getBoundingClientRect().width>c.clientWidth)){f-=.5;c.style.fontSize=f+'px';}}
@@ -459,27 +463,42 @@ function undoToast(msg){bar('undo',msg,'Deshacer',()=>{const b=document.getEleme
 Store.onChange(()=>{const b=document.getElementById('undo');if(b){clearTimeout(b._t);b.remove();}});
 // Errores de guardado: siempre se avisa (los cambios ya se han deshecho en memoria) y se vuelve a pintar el estado real.
 function saveError(m){if(!m||!/No se pudo guardar|ya no existe|Ya no se puede/.test(m))return false;
-  toast(m.replace(/^.*?(No se pudo|Este elemento|Ya no se puede)/,'$1'));try{render();}catch(_){}return true;}
+  toast(m.replace(/^.*?(No se pudo|Este elemento|Ya no se puede|La cuenta elegida|La categoría elegida)/,'$1'));try{render();}catch(_){}return true;}
 window.addEventListener('error',e=>{if(saveError(e.message||(e.error&&e.error.message)))e.preventDefault();});
 window.addEventListener('unhandledrejection',e=>{if(saveError(e.reason&&e.reason.message))e.preventDefault();});
 // Sincronización entre pestañas: recargar y cerrar formularios de elementos eliminados (no se pueden volver a crear).
-window.addEventListener('storage',e=>{if(e.key!=='gastos.v1')return;if(!Store.reload()){toast('Los datos cambiaron en otra pestaña pero no se pudieron leer; recarga la app.');return;}
-  if(ed&&ed.editing&&!D().transactions.some(t=>t.id===ed.tx.id)){ed=null;renderEntry();toast('Este movimiento se eliminó en otra pestaña');}
-  const f=$('#form');if(f&&f._kind&&f._id&&!D()[f._kind].some(x=>x.id===f._id)){f.remove();toast('Se eliminó en otra pestaña');}
-  const dl=$('#dlg');if(dl)dl._close(null);
+window.addEventListener('storage',e=>{if(e.key!=='gastos.v1')return;const r=Store.reload();if(!r){toast('Los datos cambiaron en otra pestaña pero no se pudieron leer; recarga la app.');return;}
+  const dl=$('#dlg');let closeDlg=false;
+  if(r==='recovered'){closeDlg=!!(dl&&dl._corrupt);toast('Tus datos se recuperaron en otra pestaña; ya se puede guardar.');}
+  if(ed&&ed.editing&&!D().transactions.some(t=>t.id===ed.tx.id)){ed=null;renderEntry();closeDlg=true;toast('Este movimiento se eliminó en otra pestaña');}
+  else if(ed){readEntryFields();const x=ed.tx,has=id=>D().accounts.some(a=>a.id===id);let msg=null;
+    if(!has(x.accountId)){x.accountId=(D().accounts.find(a=>a.id===st.account)||D().accounts[0]).id;msg='La cuenta elegida se eliminó en otra pestaña; revisa la cuenta.';}
+    if(x.type==='transfer'&&!has(x.toAccountId)){x.toAccountId=(D().accounts.find(a=>a.id!==x.accountId)||{}).id;msg='La cuenta destino se eliminó en otra pestaña; revísala.';}
+    if(x.type!=='transfer'&&x.categoryId&&!D().categories.some(c=>c.id===x.categoryId)){x.categoryId=null;msg='La categoría elegida se eliminó en otra pestaña; elige otra.';}
+    renderEntry();if(msg)toast(msg);}
+  const f=$('#form');if(f&&f._kind&&f._id&&!D()[f._kind].some(x=>x.id===f._id)){f.remove();closeDlg=true;toast('Se eliminó en otra pestaña');}
+  if(dl&&closeDlg)dl._close(null);
   render();});
 let toastT;function toast(msg,actionLabel,fn){const t=$('#toast');t.innerHTML=esc(msg)+(actionLabel?` <button id="toastBtn">${esc(actionLabel)}</button>`:'');t.classList.remove('hidden');
   if(fn)$('#toastBtn').onclick=fn;clearTimeout(toastT);if(!actionLabel)toastT=setTimeout(()=>t.classList.add('hidden'),2200);}
 // Teclado y pegar en la calculadora (escritorio).
 const KEYMAP={'*':'*','x':'*','X':'*','×':'*','/':'/','÷':'/','+':'+','-':'-',',':',','.':',','=':'=','Backspace':'⌫'};
-window.addEventListener('keydown',e=>{if(!ed||ed.picking||$('#dlg')||e.ctrlKey||e.metaKey||e.altKey)return;const tg=e.target;if(tg&&tg.matches&&tg.matches('input,select,textarea'))return;
+const keypadSpace=e=>(e.key===' '||e.code==='Space')&&ed&&!$('#dlg')&&e.target&&e.target.closest&&e.target.closest('#entry button');
+window.addEventListener('keyup',e=>{if(keypadSpace(e))e.preventDefault();});
+window.addEventListener('keydown',e=>{if(keypadSpace(e)){e.preventDefault();return;}if(!ed||ed.picking||$('#dlg')||e.ctrlKey||e.metaKey||e.altKey)return;const tg=e.target;if(tg&&tg.matches&&tg.matches('input,select,textarea'))return;
   if(e.key==='Enter'){e.preventDefault();const b=$('#eOk');if(b)b.click();return;}
   const k=/^[0-9]$/.test(e.key)?e.key:KEYMAP[e.key];if(!k)return;e.preventDefault();onKey(k);});
 document.addEventListener('paste',e=>{if(!ed||ed.picking||$('#dlg'))return;const tg=e.target;if(tg&&tg.matches&&tg.matches('input,select,textarea'))return;
   const txt=(e.clipboardData||window.clipboardData).getData('text');e.preventDefault();const c=Monefy.parseAmount(txt,'typed');
   if(!(c>0)||Math.floor(c/100)>999999999){toast('Importe pegado no válido');return;}ed.expr=exprFromCents(c);readEntryFields();renderEntry();});
 // Cambio de día con la app abierta: si se estaba viendo el periodo actual, avanza al nuevo día.
-let shownDay=today();function checkDay(){const t=today();if(t===shownDay)return;if(iso(st.anchor)===shownDay)st.anchor=new Date();shownDay=t;if(!ed&&!$('#form')&&!$('#dlg'))render();}
+// Avanza si se estaba viendo el periodo que contenía el día anterior (día, semana, mes o año) o un intervalo que terminaba ese día;
+// una entrada nueva abierta pasa al nuevo día salvo que el usuario haya cambiado la fecha.
+let shownDay=today();function checkDay(){const t=today();if(t===shownDay)return;const prev=shownDay;shownDay=t;
+  if(['day','week','month','year'].includes(st.ptype)){const[f,to]=range();if(prev>=f&&prev<=to)st.anchor=new Date();}
+  else if(st.ptype==='range'&&st.to===prev)st.to=t;
+  if(ed&&!ed.editing&&!ed.dateTouched){readEntryFields();if(ed.tx.date===prev){ed.tx.date=t;renderEntry();}}
+  if(!ed&&!$('#form')&&!$('#dlg'))render();}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkDay();});setInterval(checkDay,60000);
 window.addEventListener('hashchange',()=>{st.left=st.right=st.accDrop=false;render();});
 window.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#dlg'))$('#dlg')._close(null);else if(ed)closeEntry();else if($('#form'))closeForm();else if(st.left||st.right){closeDrawers();render();}}});
@@ -496,5 +515,10 @@ if('serviceWorker' in navigator){
   const hadController=!!navigator.serviceWorker.controller;let reloaded=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(reloaded||!hadController)return;reloaded=true;location.reload();});
 }
 render();
-if(Store.corrupt)corruptDialog();else setTimeout(showBackupBanner,600);
+function repairedDialog(){const r=Store.repaired;if(!r)return;const cnt={};for(const f of r.fixes)cnt[f]=(cnt[f]||0)+1;
+  const li=Object.entries(cnt).map(([f,n])=>`<li>${esc(f)}${n>1?' ×'+n:''}</li>`).join('')+r.removed.map(x=>`<li class="exp">Retirado (${esc(x.why)}): ${esc(String(x.t.date))} · ${esc(String(x.t.amount))} · ${esc(String(x.t.note||''))}</li>`).join('');
+  ask({title:'Se han reparado tus datos',msg:'Algunos datos guardados no se habrían podido restaurar desde una copia y se han corregido'+(r.removed.length?' ('+r.removed.length+' movimientos irreparables se han retirado)':'')+'. '+(r.copyKey?'El original está guardado en Ajustes › Datos dañados guardados.':'No hay espacio para guardar el original: descárgalo ahora.'),ok:'Entendido',okOnly:true,
+    body:`<ul class="repl" id="repairList" style="max-height:40vh;overflow:auto;font-size:13px">${li}</ul><div class="dlgbtns"><button class="btn flat" id="rDown">Descargar original</button></div>`});
+  $('#rDown').onclick=()=>{try{download('slot-ai-datos-originales-'+stamp()+'.json',r.raw||'','application/json');toast('Original descargado');}catch(e){toast('No se pudo descargar');}};}
+if(Store.corrupt)corruptDialog();else if(Store.repaired)repairedDialog();else setTimeout(showBackupBanner,600);
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persisted().then(p=>p||navigator.storage.persist()).catch(()=>{});}catch(e){}
