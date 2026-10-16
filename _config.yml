@@ -1,0 +1,6 @@
+exclude:
+  - tests
+  - docs
+  - screenshots
+  - README.md
+  - node_modules

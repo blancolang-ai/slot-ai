@@ -15,21 +15,33 @@ function parseRows(text,sep){const rows=[];let row=[],f='',q=false;
     else f+=ch;}
   row.push(f);if(row.some(x=>x.trim()))rows.push(row);return rows;}
 // Importe → céntimos enteros (sin coma flotante). Admite 1.234,56 / 1,234.56 / -27.2 / 27,2 / "−14 €" / (14,00) / 1 234,56.
-// Un único separador seguido de exactamente 3 cifras (1.234 / 1,234) se toma como separador de miles.
-function parseAmount(s){s=String(s??'').trim();const paren=/^\(.*\)$/.test(s);
-  s=s.replace(/[\u2212\u2012\u2013\u2014]/g,'-').replace(/[^\d,.\-+]/g,'');if(!/\d/.test(s))return NaN;
+// dec = separador decimal: ',' o '.' (detectado para todo el archivo con detectDecimal), 'typed' (escrito a mano:
+// un separador único es siempre decimal y se rechazan más de 2 decimales) o undefined (un separador único seguido de
+// exactamente 3 cifras con parte entera 1-999 sin cero inicial se toma como miles: 1.234 / 1,234).
+function cleanAmount(s){s=String(s??'').trim();const paren=/^\(.*\)$/.test(s);
+  s=s.replace(/[\u2212\u2012\u2013\u2014]/g,'-').replace(/[^\d,.\-+]/g,'');return{s,paren};}
+function parseAmount(input,dec){let{s,paren}=cleanAmount(input);if(!/\d/.test(s))return NaN;
   const neg=paren||/^[+]?-|-$/.test(s)||(s.match(/-/g)||[]).length===1;if(/\d[-+]\d/.test(s))return NaN;s=s.replace(/[-+]/g,'');
   const lc=s.lastIndexOf(','),ld=s.lastIndexOf('.');let ip,fp='';
-  if(lc>=0&&ld>=0){const dec=lc>ld?',':'.',th=dec===','?'.':',';const i=s.lastIndexOf(dec);ip=s.slice(0,i).split(th).join('');fp=s.slice(i+1);
-    if(ip.includes(dec))return NaN;}
+  const grouped=(parts)=>parts.slice(1).every(x=>x.length===3)&&/^\d{1,3}$/.test(parts[0]);
+  if(lc>=0&&ld>=0){const d=lc>ld?',':'.',th=d===','?'.':',';const i=s.lastIndexOf(d);const ipr=s.slice(0,i);fp=s.slice(i+1);
+    if(ipr.includes(d))return NaN;const parts=ipr.split(th);if(parts.length>1&&!grouped(parts))return NaN;ip=parts.join('');}
   else if(lc>=0||ld>=0){const sep=lc>=0?',':'.',parts=s.split(sep);
-    if(parts.length>2){if(!parts.slice(1).every(x=>x.length===3))return NaN;ip=parts.join('');}
-    else if(parts[1].length===3&&/^[1-9]\d{0,2}$/.test(parts[0])){ip=parts.join('');}
-    else{ip=parts[0];fp=parts[1];}}
+    if(parts.length>2){if(!grouped(parts))return NaN;ip=parts.join('');}
+    else{const thousands=dec==='typed'?false:(dec===','||dec==='.')?sep!==dec:(parts[1].length===3&&/^[1-9]\d{0,2}$/.test(parts[0]));
+      if(thousands){if(!grouped(parts))return NaN;ip=parts.join('');}else{ip=parts[0];fp=parts[1];}}}
   else ip=s;
   if(!/^\d*$/.test(ip)||!/^\d*$/.test(fp)||(!ip&&!fp))return NaN;
+  if(dec==='typed'&&fp.length>2)return NaN;
   let c=BigInt(ip||'0')*100n+BigInt((fp+'00').slice(0,2)||'0');if(fp.length>2&&+fp[2]>=5)c+=1n; // redondeo a céntimos (mitad hacia arriba)
   if(c>BigInt(Number.MAX_SAFE_INTEGER))return NaN;const v=Number(c);return neg&&v?-v:v;}
+// Detecta el separador decimal de un archivo a partir de los importes inequívocos (ambos separadores, o un separador seguido de 1-2 o 4+ cifras).
+function detectDecimal(values){let dot=0,com=0;
+  for(const v of values){const{s}=cleanAmount(v);const lc=s.lastIndexOf(','),ld=s.lastIndexOf('.');
+    if(lc>=0&&ld>=0){lc>ld?com++:dot++;continue;}
+    const sep=lc>=0?',':ld>=0?'.':null;if(!sep)continue;const parts=s.split(sep);if(parts.length!==2)continue;
+    if(parts[1].length!==3)sep===','?com++:dot++;}
+  return dot>com?'.':com>dot?',':undefined;}
 const pad=n=>String(n).padStart(2,'0');
 function dateParser(samples){let dmy=0,mdy=0;
   for(const s of samples){const m=String(s).trim().match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/);if(!m)continue;if(+m[1]>12)dmy++;if(+m[2]>12)mdy++;}
@@ -48,11 +60,12 @@ function parse(input){
   const head=rows[0].map(norm);const ix={};
   for(const k in COLS){ix[k]=head.findIndex(h=>COLS[k].includes(h));}
   for(const k of ['date','account','category','amount'])if(ix[k]<0)throw new Error('Falta la columna «'+k+'». ¿Es una exportación de Monefy?');
+  const dec=detectDecimal(rows.slice(1).map(r=>r[ix.amount]));
   const pd=dateParser(rows.slice(1).map(r=>r[ix.date]));
   const accNames=[...new Set(rows.slice(1).map(r=>(r[ix.account]||'').trim()).filter(Boolean))];
   const accByNorm=Object.fromEntries(accNames.map(a=>[norm(a),a]));
   const items=[],errors=[],cur=new Set();
-  rows.slice(1).forEach((r,i)=>{const date=pd(r[ix.date]),amount=parseAmount(r[ix.amount]),account=(r[ix.account]||'').trim(),category=(r[ix.category]||'').trim();
+  rows.slice(1).forEach((r,i)=>{const date=pd(r[ix.date]),amount=parseAmount(r[ix.amount],dec),account=(r[ix.account]||'').trim(),category=(r[ix.category]||'').trim();
     const note=ix.note>=0?(r[ix.note]||'').trim():'';if(ix.currency>=0&&r[ix.currency])cur.add(r[ix.currency].trim());
     if(!date||isNaN(amount)||!account){errors.push(i+2);return;}
     if(!amount)return;
@@ -99,11 +112,12 @@ function build(p,base,mode,uid){uid=uid||(()=>Date.now().toString(36)+Math.rando
   for(const e of p.summary.expense)catId[e.name]=ensure('expense',e.name);
   for(const e of p.summary.income)incId[e.name]=ensure('income',e.name);
   const key=t=>[t.type,t.date,t.amount,t.accountId,t.toAccountId||'',t.categoryId||'',norm(t.note)].join('|');
-  const seen=new Set(d.transactions.map(key));let added=0,dup=0;
+  // Duplicados: solo se omiten tantas copias como ya existen en los datos (dos filas iguales reales en el CSV se conservan).
+  const seen=new Map();for(const t of d.transactions){const k=key(t);seen.set(k,(seen.get(k)||0)+1);}let added=0,dup=0;
   for(const t of p.tx){const x={id:uid(),type:t.type,amount:t.amount,date:t.date,note:t.note,updated:Date.now()};
     if(t.type==='transfer'){x.accountId=accId[t.from];x.toAccountId=accId[t.to];}else{x.accountId=accId[t.account];x.categoryId=t.type==='expense'?catId[t.category]:incId[t.category];}
-    const k=key(x);if(merge&&seen.has(k)){dup++;continue;}seen.add(k);d.transactions.push(x);added++;}
+    const k=key(x);if(merge&&seen.get(k)>0){seen.set(k,seen.get(k)-1);dup++;continue;}d.transactions.push(x);added++;}
   d.version=4;d.updated=Date.now();return{data:d,added,dup};}
-const api={decode,parse,parseAmount,build,mapExpense};
+const api={decode,parse,parseAmount,detectDecimal,build,mapExpense};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.Monefy=api;
 })(typeof window!=='undefined'?window:this);

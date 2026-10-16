@@ -28,6 +28,8 @@ function migrate(d){
   const v=d.version||1;
   d.settings={...defaults().settings,...(d.settings||{})};
   // Cuentas
+  d.accounts=Array.isArray(d.accounts)?d.accounts.filter(a=>a&&typeof a==='object'&&typeof a.id==='string'&&a.id):d.accounts;
+  d.transactions=d.transactions.filter(t=>t&&typeof t==='object');
   if(!Array.isArray(d.accounts)||!d.accounts.length){
     d.accounts=[{id:'cash',name:'Efectivo',icon:'banknotes',initial:d.settings.initialBalance||0}];
   }
@@ -52,57 +54,83 @@ function migrate(d){
     const untouched=c=>c.type==='expense'&&DEF[c.id]&&norm(c.name)===norm(DEF[c.id].n);
     const exp=d.categories.filter(c=>c.type==='expense');
     if(d.transactions.length&&(d.imported||exp.some(c=>!DEF[c.id])))d.categories=d.categories.filter(c=>!untouched(c)||used.has(c.id));}
+  // Movimientos con categoría inexistente: quedan «Sin categoría» (sin referencia colgante).
+  const catIds=new Set(d.categories.map(c=>c.id));d.transactions.forEach(t=>{if(t.type==='transfer'||(t.categoryId!=null&&!catIds.has(t.categoryId)))delete t.categoryId;});
   d.version=SCHEMA;
   return d;
 }
 // Validación estricta de una copia antes de restaurarla: nunca se aceptan datos que cambien importes o saldos en silencio.
 const okDate=s=>{if(typeof s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s))return false;const[y,m,d]=s.split('-').map(Number);const x=new Date(Date.UTC(y,m-1,d));return x.getUTCFullYear()===y&&x.getUTCMonth()===m-1&&x.getUTCDate()===d;};
+const okId=s=>typeof s==='string'&&/^[A-Za-z0-9_.:-]{1,64}$/.test(s);
 const okCents=(n,pos)=>Number.isSafeInteger(n)&&(pos?n>0:true);
 function validate(d){const bad=m=>{throw new Error('Copia no válida: '+m);};
   if(!d||typeof d!=='object'||Array.isArray(d))bad('no es una copia de Slot-AI');
   if(!Array.isArray(d.categories)||!Array.isArray(d.transactions))bad('faltan categorías o movimientos');
   if(d.version!=null&&!(Number.isInteger(d.version)&&d.version>=1&&d.version<=SCHEMA))bad('versión '+d.version+' desconocida (actualiza la app)');
   const ids=new Set(),accs=new Set(),cats=new Set();
-  if(d.accounts!=null){if(!Array.isArray(d.accounts))bad('cuentas');for(const a of d.accounts){if(!a||typeof a.id!=='string'||!a.id||accs.has(a.id))bad('cuenta sin id o repetida');if(typeof a.name!=='string')bad('cuenta sin nombre');if(a.initial!=null&&!okCents(a.initial))bad('saldo inicial no válido en «'+a.name+'»');accs.add(a.id);}}
-  for(const c of d.categories){if(!c||typeof c.id!=='string'||!c.id||cats.has(c.id))bad('categoría sin id o repetida');if(c.type!=='expense'&&c.type!=='income')bad('tipo de categoría');cats.add(c.id);}
+  if(d.accounts!=null){if(!Array.isArray(d.accounts))bad('cuentas');for(const a of d.accounts){if(!a||!okId(a.id)||accs.has(a.id))bad('cuenta con id no válido o repetido');if(typeof a.name!=='string')bad('cuenta sin nombre');if(a.initial!=null&&!okCents(a.initial))bad('saldo inicial no válido en «'+a.name+'»');accs.add(a.id);}}
+  for(const c of d.categories){if(!c||!okId(c.id)||cats.has(c.id))bad('categoría con id no válido o repetido');if(c.type!=='expense'&&c.type!=='income')bad('tipo de categoría');cats.add(c.id);}
   d.transactions.forEach((t,i)=>{const w=' (movimiento '+(i+1)+')';
-    if(!t||typeof t.id!=='string'||!t.id||ids.has(t.id))bad('id ausente o repetido'+w);ids.add(t.id);
+    if(!t||!okId(t.id)||ids.has(t.id))bad('id no válido o repetido'+w);ids.add(t.id);
     if(!['expense','income','transfer'].includes(t.type))bad('tipo «'+(t&&t.type)+'»'+w);
     if(!okCents(t.amount,true))bad('importe no válido «'+t.amount+'»'+w);
     if(!okDate(t.date))bad('fecha no válida «'+t.date+'»'+w);
     if(accs.size&&!accs.has(t.accountId))bad('cuenta inexistente'+w);
     if(t.type==='transfer'&&(!accs.has(t.toAccountId)||t.toAccountId===t.accountId))bad('transferencia con cuentas no válidas'+w);
+    if(t.categoryId!=null&&!okId(t.categoryId))bad('categoría no válida'+w);
     if(t.note!=null&&typeof t.note!=='string')bad('nota'+w);});
   return d;}
 const LocalBackend={load(){const s=localStorage.getItem(KEY);return s==null?null:JSON.parse(s)},save(d){localStorage.setItem(KEY,JSON.stringify(d))}};
 let backend=LocalBackend, data;
-// Si los datos guardados no se pueden leer NO se sobrescriben: se guarda una copia intacta en KEY.corrupt-<fecha>.
-try{const raw=backend.load();data=raw?migrate(raw):defaults();if(raw)backend.save(data);}
-catch(e){console.warn('Datos no válidos',e);try{const s=localStorage.getItem(KEY);if(s)localStorage.setItem(KEY+'.corrupt-'+Date.now(),s);}catch(_){}data=defaults();}
-function save(){data.updated=Date.now();try{backend.save(data);}catch(e){throw new Error('No se pudo guardar (almacenamiento lleno o bloqueado). Exporta una copia.');}}
+// Si los datos guardados no se pueden leer NO se sobrescriben nunca: se guarda además una copia en KEY.corrupt-<fecha>
+// y se bloquea el guardado hasta que el usuario descargue/restaure o decida empezar de cero (ver app.js).
+let corrupt=null;
+try{const raw=backend.load();data=raw?migrate(raw):defaults();}
+catch(e){console.warn('Datos no válidos',e);data=defaults();let raw=null;try{raw=localStorage.getItem(KEY);}catch(_){}
+  let copyKey=null;if(raw){try{copyKey=Object.keys(localStorage).find(k=>k.startsWith(KEY+'.corrupt-')&&localStorage.getItem(k)===raw)||null;}catch(_){}
+    if(!copyKey){copyKey=KEY+'.corrupt-'+Date.now();try{localStorage.setItem(copyKey,raw);}catch(_){copyKey=null;}}}
+  corrupt={raw,copyKey,error:String(e&&e.message||e)};}
+if(!corrupt){try{if(localStorage.getItem(KEY)!=null)backend.save(data);}catch(e){/* sin espacio: los datos siguen en memoria y el original intacto */}}
+const SAVE_ERR='No se pudo guardar (almacenamiento lleno o bloqueado). Exporta una copia.';
+let onChange=null;
+function save(){if(corrupt)throw new Error('No se pudo guardar: tus datos guardados están dañados. Descárgalos o restaura una copia primero.');data.updated=Date.now();try{backend.save(data);}catch(e){throw new Error(SAVE_ERR);}}
 // Ejecuta un cambio de forma atómica: si no se puede guardar, se deshace en memoria.
-function atomic(fn){const snap=JSON.stringify(data);try{const r=fn();save();return r;}catch(e){data=JSON.parse(snap);throw e;}}
-const PREV=KEY+'.prev';
-function snapshot(){try{localStorage.setItem(PREV,JSON.stringify(data));}catch(e){}}
+function atomic(fn){const snap=JSON.stringify(data);try{const r=fn();save();clearPrev();if(onChange)onChange();return r;}catch(e){data=JSON.parse(snap);throw e;}}
+const PREV=KEY+'.prev';const GONE='Este elemento ya no existe (se eliminó en otra pestaña).';
+// Copia para Deshacer: nunca queda una copia antigua; si no se puede guardar, no se ofrece Deshacer.
+function clearPrev(){try{localStorage.removeItem(PREV);}catch(e){}}
+function snapshot(){clearPrev();try{localStorage.setItem(PREV,JSON.stringify({ts:Date.now(),data}));return true;}catch(e){clearPrev();return false;}}
+const UNDO_MS=15000;
+function replaceAll(m){const undoable=snapshot();const old=data;data=m;try{save();}catch(e){data=old;clearPrev();throw e;}if(onChange)onChange();return undoable;}
 window.Store={uid,migrate,get data(){return data},save,
-  upsert(coll,obj){return atomic(()=>{const a=data[coll];obj.updated=Date.now();if(!obj.id)obj.id=uid();const i=a.findIndex(x=>x.id===obj.id);i>=0?a[i]=obj:a.push(obj);return obj;});},
+  // mustExist: al editar, si el elemento ya no existe (eliminado en otra pestaña) no se vuelve a crear.
+  upsert(coll,obj,mustExist){return atomic(()=>{const a=data[coll];if(mustExist&&!a.some(x=>x.id===obj.id))throw new Error(GONE);obj.updated=Date.now();if(!obj.id)obj.id=uid();const i=a.findIndex(x=>x.id===obj.id);i>=0?a[i]=obj:a.push(obj);return obj;});},
   remove(coll,id){atomic(()=>{data[coll]=data[coll].filter(x=>x.id!==id);});},
-  // Mueve los movimientos (y el saldo inicial) de una cuenta a otra; las transferencias entre ambas desaparecen (no cambian el total).
-  moveAccount(from,to){return atomic(()=>{let n=0;for(const t of data.transactions){let ch=false;if(t.accountId===from){t.accountId=to;ch=true;}if(t.toAccountId===from){t.toAccountId=to;ch=true;}if(ch){n++;t.updated=Date.now();}}
+  // Mueve los movimientos de una cuenta a otra y la elimina; las transferencias entre ambas desaparecen. El saldo inicial de la cuenta eliminada deja de contar (decisión de producto; se avisa en el diálogo).
+  moveAccount(from,to){return atomic(()=>{if(!data.accounts.some(x=>x.id===from)||!data.accounts.some(x=>x.id===to)||from===to)throw new Error(GONE);let n=0;for(const t of data.transactions){let ch=false;if(t.accountId===from){t.accountId=to;ch=true;}if(t.toAccountId===from){t.toAccountId=to;ch=true;}if(ch){n++;t.updated=Date.now();}}
     data.transactions=data.transactions.filter(t=>!(t.type==='transfer'&&t.accountId===t.toAccountId));
-    const a=data.accounts.find(x=>x.id===from),b=data.accounts.find(x=>x.id===to);if(a&&b){b.initial=(b.initial||0)+(a.initial||0);b.updated=Date.now();}
     data.accounts=data.accounts.filter(x=>x.id!==from);return n;});},
   // Elimina una categoría moviendo sus movimientos a otra (to) o dejándolos «Sin categoría» (to=null).
-  removeCategory(id,to){return atomic(()=>{let n=0;for(const t of data.transactions)if(t.categoryId===id){n++;t.updated=Date.now();if(to)t.categoryId=to;else delete t.categoryId;}data.categories=data.categories.filter(c=>c.id!==id);return n;});},
+  removeCategory(id,to){return atomic(()=>{if(!data.categories.some(c=>c.id===id)||(to&&!data.categories.some(c=>c.id===to)))throw new Error(GONE);let n=0;for(const t of data.transactions)if(t.categoryId===id){n++;t.updated=Date.now();if(to)t.categoryId=to;else delete t.categoryId;}data.categories=data.categories.filter(c=>c.id!==id);return n;});},
   setSetting(k,v){atomic(()=>{data.settings[k]=v;});},
   exportData(){return JSON.stringify({app:'slot-ai',...data},null,1);},
   importData(json){let d;try{d=JSON.parse(json);}catch(e){throw new Error('El archivo no es una copia de Slot-AI (JSON no válido).');}
     if(d&&d.app&&d.app!=='slot-ai'&&d.app!=='gastos-pwa')throw new Error('El archivo no es una copia de Slot-AI.');
-    validate(d);delete d.app;const m=migrate(d);snapshot();const old=data;data=m;try{save();}catch(e){data=old;throw e;}},
-  reset(){snapshot();const old=data;data=defaults();try{save();}catch(e){data=old;throw e;}},
-  hasPrev(){try{return !!localStorage.getItem(PREV)}catch(e){return false}},
-  undo(){const s=localStorage.getItem(PREV);if(!s)return false;const old=data;data=migrate(JSON.parse(s));try{save();}catch(e){data=old;throw e;}localStorage.removeItem(PREV);return true;},
-  reload(){try{const raw=backend.load();if(raw)data=migrate(raw);}catch(e){}},
+    validate(d);delete d.app;const m=migrate(d);return replaceAll(m);},
+  reset(){return replaceAll(defaults());},
+  // Datos dañados al arrancar
+  get corrupt(){return corrupt;},
+  // Empezar de cero / restaurar tras datos dañados: solo si la copia dañada está a salvo (o el usuario la descargó).
+  resolveCorrupt(){corrupt=null;},
+  hasPrev(){try{const p=JSON.parse(localStorage.getItem(PREV));return !!(p&&p.data&&Date.now()-p.ts<UNDO_MS);}catch(e){return false}},
+  clearPrev,
+  // Deshacer: solo dentro del plazo, sin cambios posteriores (cualquier cambio borra la copia) y con la copia validada.
+  undo(){let p=null;try{p=JSON.parse(localStorage.getItem(PREV));}catch(e){}clearPrev();
+    if(!p||!p.data||Date.now()-p.ts>=UNDO_MS)throw new Error('Ya no se puede deshacer.');
+    const d=p.data;validate(d);const m=migrate(d);const old=data;data=m;try{save();}catch(e){data=old;throw e;}if(onChange)onChange();return true;},
+  // Recarga tras un cambio en otra pestaña. Devuelve false si los datos de la otra pestaña no se pueden leer (se conservan los de memoria).
+  reload(){try{const raw=backend.load();if(raw)data=migrate(raw);return true;}catch(e){return false;}},
+  onChange(fn){onChange=fn;},
   validate,okDate,
   setBackend(b){backend=b;}};
 })();

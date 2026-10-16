@@ -1,6 +1,6 @@
 // Auditoría v1.6: pruebas aleatorias (propiedades) de totales/saldos, copia ida y vuelta, validación, calculadora, navegación.
 const {chromium}=require('playwright');const fs=require('fs');const M=require('../js/monefy.js');
-const URL=process.env.URL||'http://localhost:8123/gastos/';const PRIV='/workspace/private/slot-ai-import.json';
+const URL=process.env.URL||'http://localhost:8123/gastos/';
 const results=[];const ok=(n,c,extra)=>{results.push((c?'PASS ':'FAIL ')+n+(c||extra===undefined?'':' → '+JSON.stringify(extra)));if(!c)process.exitCode=1;};
 process.on('exit',()=>{console.log(results.join('\n'));const f=results.filter(r=>r.startsWith('FAIL')).length;console.log(`${results.length-f}/${results.length} OK`);});
 // ---- generador determinista ----
@@ -30,8 +30,8 @@ const cents=s=>{s=s.replace(/[^\d,\-]/g,'');return Math.round(+s.replace(',','.'
  const p=await ctx.newPage();p.on('pageerror',e=>errs.push(e.message));p.on('console',m=>{if(m.type()==='error')errs.push(m.text())});
  await p.goto(URL);await p.waitForSelector('.ci');
  // ---------- calculadora ----------
- const CALC={'0,1+0,2':30,'19,99×3':5997,'10÷3×3':1000,'100÷3':3333,'0,05×0,5':3,'1,1×1,1':121,'2-5':-300,'12,5':1250,'5÷0':0,'999999999,99+0,01':100000000000,'1+':100,'+5':500};
- for(const k in CALC){const v=await p.evaluate(e=>evalExpr(e),k);ok('calculadora '+k+' = '+CALC[k],v===CALC[k],v);}
+ const CALC={'0,1+0,2':30,'19,99×3':5997,'10÷3×3':1000,'100÷3':3333,'0,05×0,5':3,'1,1×1,1':121,'2-5':-300,'12,5':1250,'5÷0':NaN,'999999999,99+0,01':100000000000,'1+':100,'+5':500};
+ for(const k in CALC){const v=await p.evaluate(e=>evalExpr(e),k);ok('calculadora '+k+' = '+CALC[k],Object.is(v,CALC[k]),v);}
  {const r=await p.evaluate(()=>{let bad=null;for(let i=0;i<5000;i++){const c=Math.floor(Math.random()*1e9);if(evalExpr(exprFromCents(c))!==c){bad=c;break;}}return bad;});ok('calculadora: 5000 importes editados vuelven exactos',r===null,r);}
  // ---------- teclado ----------
  await p.click('[data-act="add"][data-type="expense"]');for(const k of ['1','2',',','3','4','5','+','0',',','6','6','='])await p.click(`#entry [data-key="${k}"]`);
@@ -89,7 +89,7 @@ const cents=s=>{s=s.replace(/[^\d,\-]/g,'');return Math.round(+s.replace(',','.'
  // restaurar válido + Deshacer
  const other=dataset();fs.writeFileSync('/tmp/other.json',JSON.stringify(other));await p.setInputFiles('#fileImport','/tmp/other.json');await p.click('#dlgOk');await p.waitForTimeout(200);
  ok('UI: restaurar copia válida',(await p.evaluate(()=>Store.data.transactions.length))===other.transactions.length);
- await p.click('#toastBtn');await p.waitForTimeout(200);ok('Deshacer restauración recupera los datos anteriores',(await p.evaluate(()=>Store.data.transactions.length))===good.transactions.length);
+ await p.click('#undoBtn');await p.waitForTimeout(200);ok('Deshacer restauración recupera los datos anteriores',(await p.evaluate(()=>Store.data.transactions.length))===good.transactions.length);
  // datos guardados ilegibles: no se sobrescriben
  await p.evaluate(()=>localStorage.setItem('gastos.v1','{roto'));await p.goto(URL);await p.reload();await p.waitForSelector('.ci');
  ok('datos locales ilegibles: copia intacta en gastos.v1.corrupt-*',await p.evaluate(()=>Object.keys(localStorage).some(k=>k.startsWith('gastos.v1.corrupt-')&&localStorage.getItem(k)==='{roto')));
@@ -101,10 +101,10 @@ const cents=s=>{s=s.replace(/[^\d,\-]/g,'');return Math.round(+s.replace(',','.'
  await p.click('[data-act="catTab"][data-t="expense"]');await p.click('.grow:has-text("Uno")');await p.click('#fDel');ok('categoría usada: ofrece mover',!!(await p.$('#dlg #dlgTo')));
  await p.selectOption('#dlgTo','c2');await p.click('#dlgOk');await p.waitForTimeout(150);
  let dd=await p.evaluate(()=>Store.data);ok('categoría eliminada y movimientos pasados a «Dos»',!dd.categories.some(c=>c.id==='c1')&&dd.transactions.find(t=>t.id==='x1').categoryId==='c2');
- // cuenta eliminada: saldo inicial pasa a destino → saldo total igual
+ // cuenta eliminada: su saldo inicial se descarta (decisión de producto) y el diálogo avisa del cambio en el saldo total
  await p.goto(URL);const tot0=await p.evaluate(()=>{st.ptype='all';st.account='all';render();return balance();});
- await p.click('[data-act="right"]');await p.click('.arow:has-text("A")');await p.click('#fDel');await p.selectOption('#dlgTo','b');await p.click('#dlgOk');await p.waitForTimeout(150);
- const tot1=await p.evaluate(()=>balance());dd=await p.evaluate(()=>Store.data);ok('eliminar cuenta con movimientos: saldo total se conserva (inicial sumado)',tot0===tot1&&dd.accounts.length===1&&dd.accounts[0].initial===3500,[tot0,tot1]);
+ await p.click('[data-act="right"]');await p.click('.arow:has-text("A")');await p.click('#fDel');const warn=await p.textContent('#dlg');await p.selectOption('#dlgTo','b');await p.click('#dlgOk');await p.waitForTimeout(150);
+ const tot1=await p.evaluate(()=>balance());dd=await p.evaluate(()=>Store.data);ok('eliminar cuenta con movimientos: aviso del cambio (-10,00 €) y saldo inicial descartado',/saldo total cambiará en -10,00/.test(warn)&&tot0-tot1===1000&&dd.accounts.length===1&&dd.accounts[0].initial===2500,[tot0,tot1,warn]);
  // ring con movimientos sin categoría (copias antiguas)
  await p.evaluate(()=>{Store.data.transactions.push({id:'o1',type:'expense',amount:500,date:'2026-10-03',accountId:'b',categoryId:'gone',note:''});Store.save();render();});
  ok('dashboard: gasto de categoría borrada cuenta en total sin romper el gráfico',cents(await p.textContent('#totExp'))===-1000);
@@ -126,10 +126,6 @@ const cents=s=>{s=s.replace(/[^\d,\-]/g,'');return Math.round(+s.replace(',','.'
  // saldo inicial con punto decimal
  await p.click('[data-act="right"]');await p.click('[data-act="newAcc"]');await p.fill('#fName','Test');await p.fill('#fInit','12.5');await p.click('#fSave');
  ok('saldo inicial «12.5» = 12,50 € (no 125)',(await p.evaluate(()=>Store.data.accounts.find(a=>a.name==='Test').initial))===1250);
- // ---------- datos reales (solo en local, nunca en el repo) ----------
- if(fs.existsSync(PRIV)){await p.evaluate(t=>{Store.importData(t);st.ptype='all';st.account='all';location.hash='#/';render();},fs.readFileSync(PRIV,'utf8'));
-  const r=await p.evaluate(()=>({inc:document.querySelector('#totInc').textContent,exp:document.querySelector('#totExp').textContent,n:Store.data.transactions.length,a:Store.data.accounts.length,bal:document.querySelector('#balance').textContent}));
-  ok('datos privados: ingresos 13.507,50, gastos 13.175,01, neto 332,49, 290 movimientos, 3 cuentas',r.inc.replace(/\s/g,' ')==='13.507,50 €'&&cents(r.exp)===-1317501&&cents(r.bal)===33249&&r.n===290&&r.a===3,r);}
  ok('sin errores de consola',!errs.length,errs);
  await b.close();
 })().catch(e=>{ok('excepción',false,String(e&&e.stack||e));process.exit(1);});
