@@ -5,6 +5,9 @@ body.dark{--hdr:#3f7d54;--hdr2:#4b8f62;--bg:#141b17;--card:#1d2621;--fg:#e3ece6;
 html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Roboto,"Segoe UI",sans-serif}
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
 input,select{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px}
+/* sin zoom: gestos de doble toque desactivados y campos >= 16px (iOS no amplía al enfocar) */
+html,body,button,a,label,input,select,textarea,summary,[role=button]{touch-action:manipulation}
+input,select,textarea{font-size:max(16px,1em)}
 svg{display:block}
 #app{max-width:520px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;position:relative}
 small.c{font-size:.8em;font-family:inherit;font-weight:inherit;vertical-align:baseline;line-height:1;font-variant-numeric:lining-nums tabular-nums}

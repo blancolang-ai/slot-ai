@@ -115,7 +115,7 @@ process.on('exit',()=>console.log(results.join('\n')));
  await p.reload();await p.waitForSelector('.ci');ok('persistencia tras recargar',(await txt('#totExp')).includes('1.246,50'));
  // periodos
  await leftPick('day');ok('día: '+await txt('#plabel'),/, \d+ /.test(await txt('#plabel')));
- await leftPick('week');const wl=await txt('#plabel');ok('semana empieza lunes: '+wl,wl.startsWith('12 Oct 26'));
+ await leftPick('week');const wl=await txt('#plabel');{const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));ok('semana empieza lunes: '+wl,wl.startsWith(String(d.getDate()).padStart(2,'0')+' ')||wl.startsWith(d.getDate()+' '));}
  await p.click('[data-act="prev"]');ok('semana anterior vacía',(await txt('#totExp')).includes('0,00'));
  await leftPick('month');ok('mes',(await txt('#plabel'))==='Octubre 2026');
  await p.evaluate(()=>{const el=document.querySelector('#chart');const mk=(t,x)=>{const tc=new Touch({identifier:1,target:el,clientX:x,clientY:300});el.dispatchEvent(new TouchEvent(t,{touches:t==='touchstart'?[tc]:[],changedTouches:[tc],bubbles:true}));};mk('touchstart',300);mk('touchend',100);});

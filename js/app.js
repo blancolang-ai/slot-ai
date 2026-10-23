@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION='1.6.4';
+const APP_VERSION='1.6.5';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const D=()=>Store.data;
@@ -525,3 +525,17 @@ function repairedDialog(){const r=Store.repaired;if(!r)return;const cnt={};for(c
   $('#rDown').onclick=()=>{try{download('slot-ai-datos-originales-'+stamp()+'.json',r.raw||'','application/json');toast('Original descargado');}catch(e){toast('No se pudo descargar');}};}
 if(Store.corrupt)corruptDialog();else if(Store.repaired)repairedDialog();else setTimeout(showBackupBanner,600);
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persisted().then(p=>p||navigator.storage.persist()).catch(()=>{});}catch(e){}
+
+// ---------- sin zoom (pellizco y doble toque) ----------
+// iOS ignora user-scalable=no desde iOS 10: se bloquean también los gestos y el doble toque. Un toque rápido repetido sobre
+// un botón (p. ej. teclado) se convierte en su clic, así que ningún toque se pierde. Campos de texto: comportamiento nativo.
+(function(){const pd=e=>e.preventDefault();
+  for(const t of ['gesturestart','gesturechange','gestureend'])document.addEventListener(t,pd,{passive:false});
+  let sx=0,sy=0,moved=false,last=0,lx=0,ly=0;
+  document.addEventListener('touchstart',e=>{const t=e.touches[0];sx=t.clientX;sy=t.clientY;moved=e.touches.length>1;},{passive:true});
+  document.addEventListener('touchmove',e=>{if(e.touches.length>1){e.preventDefault();moved=true;return;}const t=e.touches[0];if(t&&Math.hypot(t.clientX-sx,t.clientY-sy)>10)moved=true;},{passive:false});
+  document.addEventListener('touchend',e=>{if(e.touches.length)return;const t=e.changedTouches[0];if(!t)return;const now=Date.now();
+    const dbl=!moved&&now-last<350&&Math.hypot(t.clientX-lx,t.clientY-ly)<40;last=moved?0:now;lx=t.clientX;ly=t.clientY;if(!dbl)return;
+    const el=e.target&&e.target.closest?e.target:e.target&&e.target.parentElement;if(!el||el.closest('input,select,textarea,[contenteditable]'))return;
+    e.preventDefault();const c=el.closest('button,a[href],label,summary,[role=button],[data-act],[data-key],[data-eact],[data-f]');if(c&&!c.disabled)c.click();},{passive:false});
+})();
