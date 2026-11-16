@@ -117,9 +117,13 @@ process.on('exit',()=>console.log(results.join('\n')));
  await leftPick('day');ok('día: '+await txt('#plabel'),/, \d+ /.test(await txt('#plabel')));
  await leftPick('week');const wl=await txt('#plabel');{const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));ok('semana empieza lunes: '+wl,wl.startsWith(String(d.getDate()).padStart(2,'0')+' ')||wl.startsWith(d.getDate()+' '));}
  await p.click('[data-act="prev"]');ok('semana anterior vacía',(await txt('#totExp')).includes('0,00'));
- await leftPick('month');ok('mes',(await txt('#plabel'))==='Octubre 2026');
- await p.evaluate(()=>{const el=document.querySelector('#chart');const mk=(t,x)=>{const tc=new Touch({identifier:1,target:el,clientX:x,clientY:300});el.dispatchEvent(new TouchEvent(t,{touches:t==='touchstart'?[tc]:[],changedTouches:[tc],bubbles:true}));};mk('touchstart',300);mk('touchend',100);});
- ok('swipe → Noviembre',(await txt('#plabel')).includes('Noviembre'));
+ {const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const cap=s=>s[0].toUpperCase()+s.slice(1);
+  const now=new Date();const mes=cap(MESES[now.getMonth()])+' '+now.getFullYear();
+  const nxt=new Date(now.getFullYear(),now.getMonth()+1,1);const mesN=cap(MESES[nxt.getMonth()])+' '+nxt.getFullYear();
+  await leftPick('month');ok('mes',(await txt('#plabel'))===mes);
+  await p.evaluate(()=>{const el=document.querySelector('#chart');const mk=(t,x)=>{const tc=new Touch({identifier:1,target:el,clientX:x,clientY:300});el.dispatchEvent(new TouchEvent(t,{touches:t==='touchstart'?[tc]:[],changedTouches:[tc],bubbles:true}));};mk('touchstart',300);mk('touchend',100);});
+  ok('swipe → '+mesN.split(' ')[0],(await txt('#plabel'))===mesN);}
  await leftPick('year');ok('año',(await txt('#plabel'))==='2026');
  await leftPick('all');ok('todo: rango de fechas',/\d+ \w+ \d\d - \d+ \w+ \d\d/.test(await txt('#plabel')));
  await p.click('[data-act="left"]');await p.$eval('#pickDate',e=>{e.value='2026-10-15';e.dispatchEvent(new Event('change',{bubbles:true}))});
